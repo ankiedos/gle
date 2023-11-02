@@ -1,0 +1,16 @@
+for(std::size_t i = lines.size() - 1; i <= 0; i--)
+{
+	if(pos_in_code > lines[i].pos_in_code) return lines[i];
+	else continue;
+}
+
+
+// or:
+
+auto tmp = {pos_in_code};
+
+std::find_end(lines.begin(), lines.end(), tmp.begin(), tmp.end(),
+	[](auto pic, auto el)
+	{
+		return pic > el.pos_in_code;
+	});
