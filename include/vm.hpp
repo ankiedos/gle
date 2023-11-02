@@ -42,9 +42,9 @@ void stpush(word dst);
 void stpop(word dst);
 void sttop(word dst);
 void stget(word dst, word idx);
-void ineg(word arg);
-void fneg(word arg);
-void lneg(word arg);
+void ineg(word dst, word src);
+void fneg(word dst, word src);
+void lneg(word dst, word src);
 void iadd(word dst, word lhs, word rhs);
 void fadd(word dst, word lhs, word rhs);
 void ladd(word dst, word lhs, word rhs);
@@ -58,24 +58,27 @@ void idiv(word dst, word lhs, word rhs);
 void fdiv(word dst, word lhs, word rhs);
 void ldiv(word dst, word lhs, word rhs);
 void imod(word dst, word lhs, word rhs);
-void iinc(word arg);
-void finc(word arg);
-void linc(word arg);
-void idec(word arg);
-void fdec(word arg);
-void ldec(word arg);
-void isgn(word arg);
-void fsgn(word arg);
-void lsgn(word arg);
-void iabs(word arg);
-void fabs(word arg);
-void labs(word arg);
+void iinc(word dst, word src);
+void finc(word dst, word src);
+void linc(word dst, word src);
+void idec(word dst, word src);
+void fdec(word dst, word src);
+void ldec(word dst, word src);
+void isgn(word dst, word src);
+void fsgn(word dst, word src);
+void lsgn(word dst, word src);
+void iabs(word dst, word src);
+void fabs(word dst, word src);
+void labs(word dst, word src);
 
 word get_reg(const std::string& reg);
 word get_reg_addr(const std::string& reg);
 std::size_t stack_size();
 word get_stack(std::size_t idx);
 void zero_regs();
+
+std::string list_regs();
+std::string list_stack();
 
 }
 
