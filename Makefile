@@ -7,3 +7,10 @@ all:
 	g++ -c main.cpp -o bin/main.o -Iinclude/
 	cd bin && g++ main.o opcode.o vm.o kreczmar.o -o ./glert
 
+build-examples : build-v2.1.0
+build-v2.1.0 :
+	g++ ./utils/calc.cpp -o ./bin/calc-writer -Iinclude
+
+run-examples : run-v2.1.0
+run-v2.1.0 :
+	./bin/glert --debug true --file ./tests/calc.gle

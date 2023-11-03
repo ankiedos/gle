@@ -11,13 +11,18 @@ namespace GLERT
 {
 struct VM
 {
+	enum resource
+	{
+		ram, code, reg
+	};
 	bool debug_mode;
 	bool executing;
 	Kreczmar::memory mem;
 	std::vector<word> c;
 	std::size_t ip;
-	//word regs[7]; // a8 b8 c8 d8 e8 f8 carry
+	word regs[7]; // a8 b8 c8 d8 e8 f8 bp sp carry
 	bool flags[8]; // eq gt ls gte lse zero overflow childproc
+	resource current_resource;
 };
 
 constexpr word gle_true = 0xFF;
@@ -26,7 +31,8 @@ constexpr word gle_null = 0x00;
 constexpr word gle_unit = 0x01;
 
 
-word exec_argument(word val, word mode);
+word exec_argument_in(word val, word mode);
+word exec_argument_out(word val, word mode);
 
 void store(word dst, word src);
 void store_real(word dst, word src);

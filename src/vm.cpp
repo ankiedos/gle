@@ -15,6 +15,8 @@ auto c64 = get_reg_addr("c64");
 auto d64 = get_reg_addr("d64");
 auto e64 = get_reg_addr("e64");
 auto f64 = get_reg_addr("f64");
+auto bp = get_reg_addr("bp");
+auto sp = get_reg_addr("sp");
 auto carry64 = get_reg_addr("carry");
 
 word exec_argument_in(word val, word mode)
@@ -22,7 +24,8 @@ word exec_argument_in(word val, word mode)
 	switch(mode)
 	{
 	case AMODE_IMM:      return val;
-	case AMODE_REG:      return vm.mem.M[val];
+	case AMODE_REG:      return vm.regs[val];
+	case AMODE_CODE:     return vm.c[val];
 	case AMODE_PTR:      return vm.mem.M[val];
 	case AMODE_REMOTE:   return vm.mem.M[vm.mem.M[val]];
 	case AMODE_LOCAL:    return vm.mem.M[1] + val; // b64 + val
@@ -36,6 +39,7 @@ word exec_argument_out(word val, word mode)
 	{
 	case AMODE_PTR:      return val;
 	case AMODE_REG:      return val;
+	case AMODE_CODE:     return val;
 	case AMODE_REMOTE:   return vm.mem.M[val];
 	case AMODE_LOCAL:    return vm.mem.M[1] + val; // b64 + val
 	case AMODE_LOCALPTR: return vm.mem.M[1] + vm.mem.M[val]; // b64 + [val]
@@ -59,7 +63,7 @@ void store_boolean(word dst, word src)
 void vm_init(bool debug = false)
 {
 	vm.debug_mode = debug;
-	mem_init(vm.mem, 50);
+	mem_init(vm.mem, 50, 50);
 }
 void vm_link(const std::vector<word>& code)
 {
@@ -69,37 +73,72 @@ void vm_link(const std::vector<word>& code)
 
 void stpush(word arg)
 {
-	vm.mem.stack[vm.mem.st_top++] = arg;
+	vm.mem.stack[vm.regs[sp]++] = arg;
 }
 void stpop(word dst)
 {
 	// THROWS: SIG UNDERFLOW
-	vm.mem.M[dst] = vm.mem.stack[--vm.mem.st_top];
+	switch(vm.current_resource)
+	{
+	case VM::ram: vm.mem.M[dst] = vm.mem.stack[--vm.regs[sp]]; break;
+	case VM::code: vm.c[dst] = vm.mem.stack[--vm.regs[sp]]; break;
+	case VM::reg: vm.regs[dst] = vm.mem.stack[--vm.regs[sp]]; break;
+	}
 }
 void sttop(word dst)
 {
-	vm.mem.M[dst] = vm.mem.stack[stack_size() - 1];
+	switch(vm.current_resource)
+	{
+	case VM::ram: vm.mem.M[dst] = vm.mem.stack[vm.regs[sp] - 1]; break;
+	case VM::code: vm.c[dst] = vm.mem.stack[vm.regs[sp] - 1]; break;
+	case VM::reg: vm.regs[dst] = vm.mem.stack[vm.regs[sp] - 1]; break;
+	}
 }
 void stget(word dst, word idx)
 {
 	// THROWS SIG BOUNDS
-	vm.mem.M[dst] = get_stack(idx);
+	switch(vm.current_resource)
+	{
+	case VM::ram: vm.mem.M[dst] = get_stack(idx); break;
+	case VM::code: vm.c[dst] = get_stack(idx); break;
+	case VM::reg: vm.regs[dst] = get_stack(idx); break;
+	}
 }
 void ineg(word dst, word src)
 {
-	vm.mem.M[dst] = -vm.mem.M[src];
+	switch(vm.current_resource)
+	{
+	case VM::ram: vm.mem.M[dst] = -src; break;
+	case VM::code: vm.c[dst] = -src; break;
+	case VM::reg: vm.regs[dst] = -src; break;
+	}
 }
 void fneg(word dst, word src) // floating-point instructions must wait for the implementation of variable-sized layout
 {
-	// vm.mem.M[dst] = *(src)
+	switch(vm.current_resource)
+	{
+	case VM::ram: break;// vm.mem.M[dst] = *(src)
+	case VM::code: break;
+	case VM::reg: break;
+	}
 }
 void lneg(word dst, word src)
 {
-	vm.mem.M[dst] = vm.mem.M[src] ^ gle_true + gle_false;
+	switch(vm.current_resource)
+	{
+	case VM::ram: vm.mem.M[dst] = src ^ gle_true + gle_false; break;
+	case VM::code: vm.c[dst] = src ^ gle_true + gle_false; break;
+	case VM::reg: vm.regs[dst] = src ^ gle_true + gle_false; break;
+	}
 }
 void iadd(word dst, word lhs, word rhs)
 {
-	vm.mem.M[dst] = lhs + rhs;
+	switch(vm.current_resource)
+	{
+	case VM::ram: vm.mem.M[dst] = lhs + rhs; break;
+	case VM::code: vm.c[dst] = lhs + rhs; break;
+	case VM::reg: vm.regs[dst] = lhs + rhs; break;
+	}
 	if(lhs + rhs > std::numeric_limits<word>::max())
 	{
 		vm.flags[6] = true;
@@ -111,15 +150,30 @@ void iadd(word dst, word lhs, word rhs)
 }
 void fadd(word dst, word lhs, word rhs) // floating-point instructions must wait for the implementation of variable-sized layout
 {
-	//
+	switch(vm.current_resource)
+	{
+	case VM::ram: break;
+	case VM::code: break;
+	case VM::reg: break;
+	}
 }
 void ladd(word dst, word lhs, word rhs)
 {
-	vm.mem.M[dst] = (((lhs << 1) & rhs) != 0) ? gle_true : gle_false;
+	switch(vm.current_resource)
+	{
+	case VM::ram: vm.mem.M[dst] = (((lhs << 1) & rhs) != 0) ? gle_true : gle_false; break;
+	case VM::code: vm.c[dst] = (((lhs << 1) & rhs) != 0) ? gle_true : gle_false; break;
+	case VM::reg: vm.regs[dst] = (((lhs << 1) & rhs) != 0) ? gle_true : gle_false; break;
+	}
 }
 void isub(word dst, word lhs, word rhs)
 {
-	vm.mem.M[dst] = lhs - rhs;
+	switch(vm.current_resource)
+	{
+	case VM::ram: vm.mem.M[dst] = lhs - rhs; break;
+	case VM::code: vm.c[dst] = lhs - rhs; break;
+	case VM::reg: vm.regs[dst] = lhs - rhs; break;
+	}
 	if(lhs - rhs < std::numeric_limits<word>::min())
 	{
 		vm.flags[6] = true;
@@ -131,15 +185,30 @@ void isub(word dst, word lhs, word rhs)
 }
 void fsub(word dst, word lhs, word rhs) // floating-point instructions must wait for the implementation of variable-sized layout
 {
-	//
+	switch(vm.current_resource)
+	{
+	case VM::ram: break;
+	case VM::code: break;
+	case VM::reg: break;
+	}
 }
 void lsub(word dst, word lhs, word rhs)
 {
-	vm.mem.M[dst] = lhs ^ rhs + gle_false;
+	switch(vm.current_resource)
+	{
+	case VM::ram: vm.mem.M[dst] = lhs ^ rhs + gle_false; break;
+	case VM::code: vm.c[dst] = lhs ^ rhs + gle_false; break;
+	case VM::reg: vm.regs[dst] = lhs ^ rhs + gle_false; break;
+	}
 }
 void imul(word dst, word lhs, word rhs)
 {
-	vm.mem.M[dst] = lhs * rhs;
+	switch(vm.current_resource)
+	{
+	case VM::ram: vm.mem.M[dst] = lhs * rhs; break;
+	case VM::code: vm.c[dst] = lhs * rhs; break;
+	case VM::reg: vm.regs[dst] = lhs * rhs; break;
+	}
 	if(lhs * rhs > std::numeric_limits<word>::max())
 	{
 		vm.flags[6] = true;
@@ -151,89 +220,225 @@ void imul(word dst, word lhs, word rhs)
 }
 void fmul(word dst, word lhs, word rhs) // floating-point instructions must wait for the implementation of variable-sized layout
 {
-	// ...
+	switch(vm.current_resource)
+	{
+	case VM::ram: break;
+	case VM::code: break;
+	case VM::reg: break;
+	}
 }
 void lmul(word dst, word lhs, word rhs)
 {
-	vm.mem.M[dst] = lhs & rhs;
+	switch(vm.current_resource)
+	{
+	case VM::ram: vm.mem.M[dst] = lhs & rhs; break;
+	case VM::code: vm.c[dst] = lhs & rhs; break;
+	case VM::reg: vm.regs[dst] = lhs & rhs; break;
+	}
 }
 void idiv(word dst, word lhs, word rhs)
 {
 	// THROWS SIG DIVZERO
-	vm.mem.M[dst] = lhs / rhs;
+	switch(vm.current_resource)
+	{
+	case VM::ram: vm.mem.M[dst] = lhs / rhs; break;
+	case VM::code: vm.c[dst] = lhs / rhs; break;
+	case VM::reg: vm.regs[dst] = lhs / rhs; break;
+	}
 }
 void fdiv(word dst, word lhs, word rhs) // floating-point instructions must wait for the implementation of variable-sized layout
 {
 	// ON rhs == 0 dst = Inf
-	// ...
+	switch(vm.current_resource)
+	{
+	case VM::ram: break;
+	case VM::code: break;
+	case VM::reg: break;
+	}
 }
 void ldiv(word dst, word lhs, word rhs)
 {
-	if(lhs == gle_false) vm.mem.M[dst] = gle_true;
-	else vm.mem.M[dst] = rhs;
+	switch(vm.current_resource)
+	{
+	case VM::ram:
+		if(lhs == gle_false) vm.mem.M[dst] = gle_true;
+		else vm.mem.M[dst] = rhs;
+		break;
+	case VM::code:
+		if(lhs == gle_false) vm.c[dst] = gle_true;
+		else vm.c[dst] = rhs;
+		break;
+	case VM::reg:
+		if(lhs == gle_false) vm.regs[dst] = gle_true;
+		else vm.regs[dst] = rhs;
+		break;
+	}
 }
 void imod(word dst, word lhs, word rhs)
 {
 	// THROWS SIG DIVZERO
-	vm.mem.M[dst] = lhs % rhs;
+	switch(vm.current_resource)
+	{
+	case VM::ram: vm.mem.M[dst] = lhs % rhs; break;
+	case VM::code: vm.c[dst] = lhs % rhs; break;
+	case VM::reg: vm.regs[dst] = lhs % rhs; break;
+	}
 }
 void iinc(word dst, word src)
 {
-	vm.mem.M[dst] = vm.mem.M[src] + 1;
+	switch(vm.current_resource)
+	{
+	case VM::ram: vm.mem.M[dst] = src + 1; break;
+	case VM::code: vm.c[dst] = src + 1; break;
+	case VM::reg: vm.regs[dst] = src + 1; break;
+	}
 }
 void finc(word dst, word src) // floating-point instructions must wait for the implementation of variable-sized layout
 {
-	// ...
+	switch(vm.current_resource)
+	{
+	case VM::ram: break;
+	case VM::code: break;
+	case VM::reg: break;
+	}
 }
 void linc(word dst, word src)
 {
-	vm.mem.M[dst] = gle_true;
+	switch(vm.current_resource)
+	{
+	case VM::ram: vm.mem.M[dst] = gle_true; break;
+	case VM::code: vm.c[dst] = gle_true; break;
+	case VM::reg: vm.regs[dst] = gle_true; break;
+	}
 }
 void idec(word dst, word src)
 {
-	vm.mem.M[dst] = vm.mem.M[src] - 1;
+	switch(vm.current_resource)
+	{
+	case VM::ram: vm.mem.M[dst] = src - 1; break;
+	case VM::code: vm.c[dst] = src - 1; break;
+	case VM::reg: vm.regs[dst] = src - 1; break;
+	}
 }
 void fdec(word dst, word src) // floating-point instructions must wait for the implementation of variable-sized layout
 {
-	// ...
+	switch(vm.current_resource)
+	{
+	case VM::ram: break;
+	case VM::code: break;
+	case VM::reg: break;
+	}
 }
 void ldec(word dst, word src)
 {
-	vm.mem.M[dst] = gle_false;
+	switch(vm.current_resource)
+	{
+	case VM::ram: vm.mem.M[dst] = gle_false; break;
+	case VM::code: vm.c[dst] = gle_false; break;
+	case VM::reg: vm.regs[dst] = gle_false; break;
+	}
 }
 void isgn(word dst, word src)
 {
-	if(src > 0)
+	switch(vm.current_resource)
 	{
-		vm.mem.M[dst] = 1;
+	case VM::ram:
+		if(src > 0)
+		{
+			vm.mem.M[dst] = 1;
+		}
+		else if(src < 0)
+		{
+			vm.mem.M[dst] = -1;
+		}
+		else vm.mem.M[dst] = 0;
+		break;
+	case VM::code:
+		if(src > 0)
+		{
+			vm.c[dst] = 1;
+		}
+		else if(src < 0)
+		{
+			vm.c[dst] = -1;
+		}
+		else vm.c[dst] = 0;
+		break;
+	case VM::reg:
+		if(src > 0)
+		{
+			vm.regs[dst] = 1;
+		}
+		else if(src < 0)
+		{
+			vm.regs[dst] = -1;
+		}
+		else vm.regs[dst] = 0;
+		break;
 	}
-	else if(src < 0)
-	{
-		vm.mem.M[dst] = -1;
-	}
-	else vm.mem.M[dst] = 0;
 }
 void fsgn(word dst, word src) // floating-point instructions must wait for the implementation of variable-sized layout
 {
-	// ...
+	switch(vm.current_resource)
+	{
+	case VM::ram: break;
+	case VM::code: break;
+	case VM::reg: break;
+	}
 }
 void lsgn(word dst, word src)
 {
-	if(src == gle_true) vm.mem.M[dst] = 1;
-	else vm.mem.M[dst] = -1;
+	switch(vm.current_resource)
+	{
+	case VM::ram:
+		if(src == gle_true) vm.mem.M[dst] = 1;
+		else vm.mem.M[dst] = -1;
+		break;
+	case VM::code:
+		if(src == gle_true) vm.c[dst] = 1;
+		else vm.c[dst] = -1;
+		break;
+	case VM::reg:
+		if(src == gle_true) vm.regs[dst] = 1;
+		else vm.regs[dst] = -1;
+		break;
+	}
 }
 void iabs(word dst, word src)
 {
-	if(src < 0) vm.mem.M[dst] = -vm.mem.M[src];
+	switch(vm.current_resource)
+	{
+	case VM::ram: if(src < 0) vm.mem.M[dst] = -src; break;
+	case VM::code: if(src < 0) vm.c[dst] = -src; break;
+	case VM::reg: if(src < 0) vm.regs[dst] = -src; break;
+	}
 }
 void fabs(word dst, word src) // floating-point instructions must wait for the implementation of variable-sized layout
 {
-	// ...
+	switch(vm.current_resource)
+	{
+	case VM::ram: break;
+	case VM::code: break;
+	case VM::reg: break;
+	}
 }
 void labs(word dst, word src)
 {
-	if(src == gle_true) vm.mem.M[dst] = 1;
-	else vm.mem.M[dst] = -1;
+	switch(vm.current_resource)
+	{
+	case VM::ram:
+		if(src == gle_true) vm.mem.M[dst] = 1;
+		else vm.mem.M[dst] = -1;
+		break;
+	case VM::code:
+		if(src == gle_true) vm.c[dst] = 1;
+		else vm.c[dst] = -1;
+		break;
+	case VM::reg:
+		if(src == gle_true) vm.regs[dst] = 1;
+		else vm.regs[dst] = -1;
+		break;
+	}
 }
 
 #define ADDR_MODE(name) auto name = vm.c[vm.ip++]
@@ -257,6 +462,20 @@ exec_res vm_run()
 	vm.executing = true;
 	while(vm.ip < vm.c.size())
 	{
+		switch(vm.c[vm.ip])
+		{
+		case 0xCC:
+			vm.current_resource = VM::code;
+			vm.ip++;
+			break;
+		case 0xFF:
+			vm.current_resource = VM::reg;
+			vm.ip++;
+			break;
+		default:
+			vm.current_resource = VM::ram;
+			break;
+		}
 		switch(vm.c[vm.ip++])
 		{
 		case OP_STPUSH:
@@ -631,12 +850,14 @@ word get_reg_addr(const std::string& reg)
 	if(reg == "d64") return 3;
 	if(reg == "e64") return 4;
 	if(reg == "f64") return 5;
-	if(reg == "carry64") return 6;
+	if(reg == "bp") return 6;
+	if(reg == "sp") return 7;
+	if(reg == "carry64") return 8;
 	return 127;
 }
 std::size_t stack_size()
 {
-	return vm.mem.st_top;
+	return vm.regs[sp];
 }
 word get_stack(std::size_t idx)
 {
@@ -653,19 +874,21 @@ void zero_regs()
 std::string list_regs()
 {
 	std::string result{};
-	result += "a64 = " + std::to_string((int)vm.mem.M[a64]) + "\n";
-	result += "b64 = " + std::to_string((int)vm.mem.M[b64]) + "\n";
-	result += "c64 = " + std::to_string((int)vm.mem.M[c64]) + "\n";
-	result += "d64 = " + std::to_string((int)vm.mem.M[d64]) + "\n";
-	result += "e64 = " + std::to_string((int)vm.mem.M[e64]) + "\n";
-	result += "f64 = " + std::to_string((int)vm.mem.M[f64]) + "\n";
-	result += "carry64 = " + std::to_string((int)vm.mem.M[carry64]) + "\n";
+	result += "a64 = " + std::to_string((int)vm.regs[a64]) + "\n";
+	result += "b64 = " + std::to_string((int)vm.regs[b64]) + "\n";
+	result += "c64 = " + std::to_string((int)vm.regs[c64]) + "\n";
+	result += "d64 = " + std::to_string((int)vm.regs[d64]) + "\n";
+	result += "e64 = " + std::to_string((int)vm.regs[e64]) + "\n";
+	result += "f64 = " + std::to_string((int)vm.regs[f64]) + "\n";
+	result += "bp = " + std::to_string((int)vm.regs[bp]) + "\n";
+	result += "sp = " + std::to_string((int)vm.regs[sp]) + "\n";
+	result += "carry64 = " + std::to_string((int)vm.regs[carry64]) + "\n";
 	return result;
 }
 std::string list_stack()
 {
 	std::string result{};
-	for(std::size_t i = vm.mem.st_top; i > 0; i--)
+	for(std::size_t i = vm.regs[sp]; i > 0; i--)
 	{
 		result += std::to_string(i - 1) + ": " + std::to_string((int)vm.mem.stack[i - 1]) + "\n";
 	}

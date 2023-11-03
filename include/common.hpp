@@ -9,7 +9,7 @@
 
 namespace GLERT
 {
-using word = char;
+using word = unsigned char;
 enum exec_res
 {
 	EXEC_SUCC, EXEC_GNR_ERR, EXEC_OPRND_ERR,

@@ -10,11 +10,11 @@ ind_addr& ind_addr::operator =(const ind_addr& other)
 	return *this;
 }
 
-void mem_init(memory& m, std::size_t size)
+void mem_init(memory& m, std::size_t ram_size, std::size_t stack_size)
 {
-	m.stack.resize(50);
-	m.M.resize(size);
-	m.IAT.resize(size / 2);
+	m.stack.resize(stack_size);
+	m.M.resize(ram_size);
+	m.IAT.resize(ram_size / 2);
 	m.head = m.tail = 0;
 	m.free_frms = {};
 	m.free_frms_sz = {};
