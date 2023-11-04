@@ -32,7 +32,7 @@ Documentation can be found here: [https://github.com/ankiedos/gle/blob/gle-2/doc
 # Dangling Reference Problem
 Dangling reference problem happens, when an object has been deallocated, but there exists a pointer to it, which hasn't been nullified. In such a situation,
 when the programmer wants to access the memory frame the pointer points to...
-one of the two things can happen:
+one of the three things can happen:
 - (a) the pointer may point to a memory location now locked by another program
 - (b) the pointer may point to a memory location now used by another resource
 - (c) the pointer may point to an already released memory location
@@ -55,12 +55,14 @@ With Kreczmar-Cioni's system, `kill x` is equivalent to `kill o, x := y := null`
 
 # Memory Modules
 There will be available a bunch of different memory management modules. Currently planned are:
-- [x] object memory
+- [ ] object memory
 - [ ] imperative memory
 - [ ] functional memory
 - [ ] relational DB memory
 - [ ] blockchain memory
 - [ ] AI memory
+
+These modules are just `struct`s specifying layouts of the raw array of words.
 
 # Instruction Prefixes
 When there's `0xCC` before an opcode, `vm.current_resource` is set to `vm.c`. Then, when the instruction is being executed (e.g. `iadd`):

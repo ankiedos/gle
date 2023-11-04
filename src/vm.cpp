@@ -19,30 +19,54 @@ auto bp = get_reg_addr("bp");
 auto sp = get_reg_addr("sp");
 auto carry64 = get_reg_addr("carry");
 
-word exec_argument_in(word val, word mode)
+word mode[3] = {};
+word res[3] = {};
+word arg[3] = {};
+
+word exec_argument(word val, word mode, word res)
 {
 	switch(mode)
 	{
-	case AMODE_IMM:      return val;
-	case AMODE_REG:      return vm.regs[val];
-	case AMODE_CODE:     return vm.c[val];
-	case AMODE_PTR:      return vm.mem.M[val];
-	case AMODE_REMOTE:   return vm.mem.M[vm.mem.M[val]];
-	case AMODE_LOCAL:    return vm.mem.M[1] + val; // b64 + val
-	case AMODE_LOCALPTR: return vm.mem.M[1] + vm.mem.M[val]; // b64 + [val]
-	default: break; // THROWS SIG SEGV
-	}
-}
-word exec_argument_out(word val, word mode)
-{
-	switch(mode)
-	{
-	case AMODE_PTR:      return val;
-	case AMODE_REG:      return val;
-	case AMODE_CODE:     return val;
-	case AMODE_REMOTE:   return vm.mem.M[val];
-	case AMODE_LOCAL:    return vm.mem.M[1] + val; // b64 + val
-	case AMODE_LOCALPTR: return vm.mem.M[1] + vm.mem.M[val]; // b64 + [val]
+	case AMODE_VAL:
+		switch(res)
+		{
+		case RES_LIT:    return val;
+		case RES_RAM:    return vm.mem.M[val];
+		case RES_CODE:   return vm.c[val];
+		case RES_REG:    return vm.regs[val];
+		}
+	case AMODE_PTR:
+		switch(res)
+		{
+		case RES_LIT:    return vm.mem.M[val];
+		case RES_RAM:    return vm.mem.M[vm.mem.M[val]];
+		case RES_CODE:   return vm.mem.M[vm.c[val]];
+		case RES_REG:    return vm.mem.M[vm.regs[val]];
+		}
+	case AMODE_REMOTE:
+		switch(res)
+		{
+		case RES_LIT:    return vm.mem.M[vm.mem.M[val]];
+		case RES_RAM:    return vm.mem.M[vm.mem.M[vm.mem.M[val]]];
+		case RES_CODE:   return vm.mem.M[vm.mem.M[vm.c[val]]];
+		case RES_REG:    return vm.mem.M[vm.mem.M[vm.regs[val]]];
+		}
+	case AMODE_LOCAL:
+		switch(res)
+		{
+		case RES_LIT:    return vm.regs[1] + val;
+		case RES_RAM:    return vm.regs[1] + vm.mem.M[val];
+		case RES_CODE:   return vm.regs[1] + vm.c[val];
+		case RES_REG:    return vm.regs[1] + vm.regs[val];
+		}//return vm.mem.M[1] + val; // b64 + val
+	case AMODE_LOCALPTR:
+		switch(res)
+		{
+		case RES_LIT:    return vm.regs[1] + vm.mem.M[val];
+		case RES_RAM:    return vm.regs[1] + vm.mem.M[vm.mem.M[val]];
+		case RES_CODE:   return vm.regs[1] + vm.mem.M[vm.c[val]];
+		case RES_REG:    return vm.regs[1] + vm.mem.M[vm.regs[val]];
+		}//return vm.mem.M[1] + vm.mem.M[val]; // b64 + [val]
 	default: break; // THROWS SIG SEGV
 	}
 }
@@ -71,49 +95,49 @@ void vm_link(const std::vector<word>& code)
 	vm.ip = 0;
 }
 
-void stpush(word arg)
+void stpush()
 {
-	vm.mem.stack[vm.regs[sp]++] = arg;
+	vm.mem.stack[vm.regs[sp]++] = arg[0];
 }
-void stpop(word dst)
+void stpop()
 {
 	// THROWS: SIG UNDERFLOW
 	switch(vm.current_resource)
 	{
-	case VM::ram: vm.mem.M[dst] = vm.mem.stack[--vm.regs[sp]]; break;
-	case VM::code: vm.c[dst] = vm.mem.stack[--vm.regs[sp]]; break;
-	case VM::reg: vm.regs[dst] = vm.mem.stack[--vm.regs[sp]]; break;
+	case VM::ram: vm.mem.M[arg[0]] = vm.mem.stack[--vm.regs[sp]]; break;
+	case VM::code: vm.c[arg[0]] = vm.mem.stack[--vm.regs[sp]]; break;
+	case VM::reg: vm.regs[arg[0]] = vm.mem.stack[--vm.regs[sp]]; break;
 	}
 }
-void sttop(word dst)
+void sttop()
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram: vm.mem.M[dst] = vm.mem.stack[vm.regs[sp] - 1]; break;
-	case VM::code: vm.c[dst] = vm.mem.stack[vm.regs[sp] - 1]; break;
-	case VM::reg: vm.regs[dst] = vm.mem.stack[vm.regs[sp] - 1]; break;
+	case VM::ram: vm.mem.M[arg[0]] = vm.mem.stack[vm.regs[sp] - 1]; break;
+	case VM::code: vm.c[arg[0]] = vm.mem.stack[vm.regs[sp] - 1]; break;
+	case VM::reg: vm.regs[arg[0]] = vm.mem.stack[vm.regs[sp] - 1]; break;
 	}
 }
-void stget(word dst, word idx)
+void stget()
 {
 	// THROWS SIG BOUNDS
 	switch(vm.current_resource)
 	{
-	case VM::ram: vm.mem.M[dst] = get_stack(idx); break;
-	case VM::code: vm.c[dst] = get_stack(idx); break;
-	case VM::reg: vm.regs[dst] = get_stack(idx); break;
+	case VM::ram: vm.mem.M[arg[0]] = get_stack(arg[1]); break;
+	case VM::code: vm.c[arg[0]] = get_stack(arg[1]); break;
+	case VM::reg: vm.regs[arg[0]] = get_stack(arg[1]); break;
 	}
 }
-void ineg(word dst, word src)
+void ineg()
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram: vm.mem.M[dst] = -src; break;
-	case VM::code: vm.c[dst] = -src; break;
-	case VM::reg: vm.regs[dst] = -src; break;
+	case VM::ram: vm.mem.M[arg[0]] = -arg[1]; break;
+	case VM::code: vm.c[arg[0]] = -arg[1]; break;
+	case VM::reg: vm.regs[arg[0]] = -arg[1]; break;
 	}
 }
-void fneg(word dst, word src) // floating-point instructions must wait for the implementation of variable-sized layout
+void fneg() // floating-point instructions must wait for the implementation of variable-sized layout
 {
 	switch(vm.current_resource)
 	{
@@ -122,24 +146,24 @@ void fneg(word dst, word src) // floating-point instructions must wait for the i
 	case VM::reg: break;
 	}
 }
-void lneg(word dst, word src)
+void lneg()
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram: vm.mem.M[dst] = src ^ gle_true + gle_false; break;
-	case VM::code: vm.c[dst] = src ^ gle_true + gle_false; break;
-	case VM::reg: vm.regs[dst] = src ^ gle_true + gle_false; break;
+	case VM::ram: vm.mem.M[arg[0]] = arg[1] ^ gle_true + gle_false; break;
+	case VM::code: vm.c[arg[0]] = arg[1] ^ gle_true + gle_false; break;
+	case VM::reg: vm.regs[arg[0]] = arg[1] ^ gle_true + gle_false; break;
 	}
 }
-void iadd(word dst, word lhs, word rhs)
+void iadd()
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram: vm.mem.M[dst] = lhs + rhs; break;
-	case VM::code: vm.c[dst] = lhs + rhs; break;
-	case VM::reg: vm.regs[dst] = lhs + rhs; break;
+	case VM::ram: vm.mem.M[arg[0]] = arg[1] + arg[2]; break;
+	case VM::code: vm.c[arg[0]] = arg[1] + arg[2]; break;
+	case VM::reg: vm.regs[arg[0]] = arg[1] + arg[2]; break;
 	}
-	if(lhs + rhs > std::numeric_limits<word>::max())
+	if(arg[1] + arg[2] > std::numeric_limits<word>::max())
 	{
 		vm.flags[6] = true;
 	}
@@ -148,7 +172,7 @@ void iadd(word dst, word lhs, word rhs)
 		vm.flags[6] = false;
 	}
 }
-void fadd(word dst, word lhs, word rhs) // floating-point instructions must wait for the implementation of variable-sized layout
+void fadd() // floating-point instructions must wait for the implementation of variable-sized layout
 {
 	switch(vm.current_resource)
 	{
@@ -157,24 +181,24 @@ void fadd(word dst, word lhs, word rhs) // floating-point instructions must wait
 	case VM::reg: break;
 	}
 }
-void ladd(word dst, word lhs, word rhs)
+void ladd()
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram: vm.mem.M[dst] = (((lhs << 1) & rhs) != 0) ? gle_true : gle_false; break;
-	case VM::code: vm.c[dst] = (((lhs << 1) & rhs) != 0) ? gle_true : gle_false; break;
-	case VM::reg: vm.regs[dst] = (((lhs << 1) & rhs) != 0) ? gle_true : gle_false; break;
+	case VM::ram: vm.mem.M[arg[0]] = (((arg[1] << 1) & arg[2]) != 0) ? gle_true : gle_false; break;
+	case VM::code: vm.c[arg[0]] = (((arg[1] << 1) & arg[2]) != 0) ? gle_true : gle_false; break;
+	case VM::reg: vm.regs[arg[0]] = (((arg[1] << 1) & arg[2]) != 0) ? gle_true : gle_false; break;
 	}
 }
-void isub(word dst, word lhs, word rhs)
+void isub()
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram: vm.mem.M[dst] = lhs - rhs; break;
-	case VM::code: vm.c[dst] = lhs - rhs; break;
-	case VM::reg: vm.regs[dst] = lhs - rhs; break;
+	case VM::ram: vm.mem.M[arg[0]] = arg[1] - arg[2]; break;
+	case VM::code: vm.c[arg[0]] = arg[1] - arg[2]; break;
+	case VM::reg: vm.regs[arg[0]] = arg[1] - arg[2]; break;
 	}
-	if(lhs - rhs < std::numeric_limits<word>::min())
+	if(arg[1] - arg[2] < std::numeric_limits<word>::min())
 	{
 		vm.flags[6] = true;
 	}
@@ -183,7 +207,7 @@ void isub(word dst, word lhs, word rhs)
 		vm.flags[6] = false;
 	}
 }
-void fsub(word dst, word lhs, word rhs) // floating-point instructions must wait for the implementation of variable-sized layout
+void fsub() // floating-point instructions must wait for the implementation of variable-sized layout
 {
 	switch(vm.current_resource)
 	{
@@ -192,24 +216,24 @@ void fsub(word dst, word lhs, word rhs) // floating-point instructions must wait
 	case VM::reg: break;
 	}
 }
-void lsub(word dst, word lhs, word rhs)
+void lsub()
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram: vm.mem.M[dst] = lhs ^ rhs + gle_false; break;
-	case VM::code: vm.c[dst] = lhs ^ rhs + gle_false; break;
-	case VM::reg: vm.regs[dst] = lhs ^ rhs + gle_false; break;
+	case VM::ram: vm.mem.M[arg[0]] = arg[1] ^ arg[2] + gle_false; break;
+	case VM::code: vm.c[arg[0]] = arg[1] ^ arg[2] + gle_false; break;
+	case VM::reg: vm.regs[arg[0]] = arg[1] ^ arg[2] + gle_false; break;
 	}
 }
-void imul(word dst, word lhs, word rhs)
+void imul()
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram: vm.mem.M[dst] = lhs * rhs; break;
-	case VM::code: vm.c[dst] = lhs * rhs; break;
-	case VM::reg: vm.regs[dst] = lhs * rhs; break;
+	case VM::ram: vm.mem.M[arg[0]] = arg[1] * arg[2]; break;
+	case VM::code: vm.c[arg[0]] = arg[1] * arg[2]; break;
+	case VM::reg: vm.regs[arg[0]] = arg[1] * arg[2]; break;
 	}
-	if(lhs * rhs > std::numeric_limits<word>::max())
+	if(arg[1] * arg[2] > std::numeric_limits<word>::max())
 	{
 		vm.flags[6] = true;
 	}
@@ -218,7 +242,7 @@ void imul(word dst, word lhs, word rhs)
 		vm.flags[6] = false;
 	}
 }
-void fmul(word dst, word lhs, word rhs) // floating-point instructions must wait for the implementation of variable-sized layout
+void fmul() // floating-point instructions must wait for the implementation of variable-sized layout
 {
 	switch(vm.current_resource)
 	{
@@ -227,26 +251,26 @@ void fmul(word dst, word lhs, word rhs) // floating-point instructions must wait
 	case VM::reg: break;
 	}
 }
-void lmul(word dst, word lhs, word rhs)
+void lmul()
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram: vm.mem.M[dst] = lhs & rhs; break;
-	case VM::code: vm.c[dst] = lhs & rhs; break;
-	case VM::reg: vm.regs[dst] = lhs & rhs; break;
+	case VM::ram: vm.mem.M[arg[0]] = arg[1] & arg[2]; break;
+	case VM::code: vm.c[arg[0]] = arg[1] & arg[2]; break;
+	case VM::reg: vm.regs[arg[0]] = arg[1] & arg[2]; break;
 	}
 }
-void idiv(word dst, word lhs, word rhs)
+void idiv()
 {
 	// THROWS SIG DIVZERO
 	switch(vm.current_resource)
 	{
-	case VM::ram: vm.mem.M[dst] = lhs / rhs; break;
-	case VM::code: vm.c[dst] = lhs / rhs; break;
-	case VM::reg: vm.regs[dst] = lhs / rhs; break;
+	case VM::ram: vm.mem.M[arg[0]] = arg[1] / arg[2]; break;
+	case VM::code: vm.c[arg[0]] = arg[1] / arg[2]; break;
+	case VM::reg: vm.regs[arg[0]] = arg[1] / arg[2]; break;
 	}
 }
-void fdiv(word dst, word lhs, word rhs) // floating-point instructions must wait for the implementation of variable-sized layout
+void fdiv() // floating-point instructions must wait for the implementation of variable-sized layout
 {
 	// ON rhs == 0 dst = Inf
 	switch(vm.current_resource)
@@ -256,71 +280,44 @@ void fdiv(word dst, word lhs, word rhs) // floating-point instructions must wait
 	case VM::reg: break;
 	}
 }
-void ldiv(word dst, word lhs, word rhs)
+void ldiv()
 {
 	switch(vm.current_resource)
 	{
 	case VM::ram:
-		if(lhs == gle_false) vm.mem.M[dst] = gle_true;
-		else vm.mem.M[dst] = rhs;
+		if(arg[1] == gle_false) vm.mem.M[arg[0]] = gle_true;
+		else vm.mem.M[arg[0]] = arg[1];
 		break;
 	case VM::code:
-		if(lhs == gle_false) vm.c[dst] = gle_true;
-		else vm.c[dst] = rhs;
+		if(arg[1] == gle_false) vm.c[arg[0]] = gle_true;
+		else vm.c[arg[0]] = arg[2];
 		break;
 	case VM::reg:
-		if(lhs == gle_false) vm.regs[dst] = gle_true;
-		else vm.regs[dst] = rhs;
+		if(arg[1] == gle_false) vm.regs[arg[0]] = gle_true;
+		else vm.regs[arg[0]] = arg[2];
 		break;
 	}
 }
-void imod(word dst, word lhs, word rhs)
+void imod()
 {
 	// THROWS SIG DIVZERO
 	switch(vm.current_resource)
 	{
-	case VM::ram: vm.mem.M[dst] = lhs % rhs; break;
-	case VM::code: vm.c[dst] = lhs % rhs; break;
-	case VM::reg: vm.regs[dst] = lhs % rhs; break;
+	case VM::ram: vm.mem.M[arg[0]] = arg[1] % arg[2]; break;
+	case VM::code: vm.c[arg[0]] = arg[1] % arg[2]; break;
+	case VM::reg: vm.regs[arg[0]] = arg[1] % arg[2]; break;
 	}
 }
-void iinc(word dst, word src)
+void iinc()
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram: vm.mem.M[dst] = src + 1; break;
-	case VM::code: vm.c[dst] = src + 1; break;
-	case VM::reg: vm.regs[dst] = src + 1; break;
+	case VM::ram: vm.mem.M[arg[0]] = arg[1] + 1; break;
+	case VM::code: vm.c[arg[0]] = arg[1] + 1; break;
+	case VM::reg: vm.regs[arg[0]] = arg[1] + 1; break;
 	}
 }
-void finc(word dst, word src) // floating-point instructions must wait for the implementation of variable-sized layout
-{
-	switch(vm.current_resource)
-	{
-	case VM::ram: break;
-	case VM::code: break;
-	case VM::reg: break;
-	}
-}
-void linc(word dst, word src)
-{
-	switch(vm.current_resource)
-	{
-	case VM::ram: vm.mem.M[dst] = gle_true; break;
-	case VM::code: vm.c[dst] = gle_true; break;
-	case VM::reg: vm.regs[dst] = gle_true; break;
-	}
-}
-void idec(word dst, word src)
-{
-	switch(vm.current_resource)
-	{
-	case VM::ram: vm.mem.M[dst] = src - 1; break;
-	case VM::code: vm.c[dst] = src - 1; break;
-	case VM::reg: vm.regs[dst] = src - 1; break;
-	}
-}
-void fdec(word dst, word src) // floating-point instructions must wait for the implementation of variable-sized layout
+void finc() // floating-point instructions must wait for the implementation of variable-sized layout
 {
 	switch(vm.current_resource)
 	{
@@ -329,55 +326,82 @@ void fdec(word dst, word src) // floating-point instructions must wait for the i
 	case VM::reg: break;
 	}
 }
-void ldec(word dst, word src)
+void linc()
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram: vm.mem.M[dst] = gle_false; break;
-	case VM::code: vm.c[dst] = gle_false; break;
-	case VM::reg: vm.regs[dst] = gle_false; break;
+	case VM::ram: vm.mem.M[arg[0]] = gle_true; break;
+	case VM::code: vm.c[arg[0]] = gle_true; break;
+	case VM::reg: vm.regs[arg[0]] = gle_true; break;
 	}
 }
-void isgn(word dst, word src)
+void idec()
+{
+	switch(vm.current_resource)
+	{
+	case VM::ram: vm.mem.M[arg[0]] = arg[1] - 1; break;
+	case VM::code: vm.c[arg[0]] = arg[1] - 1; break;
+	case VM::reg: vm.regs[arg[0]] = arg[1] - 1; break;
+	}
+}
+void fdec() // floating-point instructions must wait for the implementation of variable-sized layout
+{
+	switch(vm.current_resource)
+	{
+	case VM::ram: break;
+	case VM::code: break;
+	case VM::reg: break;
+	}
+}
+void ldec()
+{
+	switch(vm.current_resource)
+	{
+	case VM::ram: vm.mem.M[arg[0]] = gle_false; break;
+	case VM::code: vm.c[arg[0]] = gle_false; break;
+	case VM::reg: vm.regs[arg[0]] = gle_false; break;
+	}
+}
+void isgn()
 {
 	switch(vm.current_resource)
 	{
 	case VM::ram:
-		if(src > 0)
+		if(arg[1] > 0)
 		{
-			vm.mem.M[dst] = 1;
+			vm.mem.M[arg[0]] = 1;
 		}
-		else if(src < 0)
+		else if(arg[1] < 0)
 		{
-			vm.mem.M[dst] = -1;
+			vm.mem.M[arg[0]] = -1;
 		}
-		else vm.mem.M[dst] = 0;
+		else vm.mem.M[arg[0]] = 0;
 		break;
 	case VM::code:
-		if(src > 0)
+		if(arg[1] > 0)
 		{
-			vm.c[dst] = 1;
+			vm.c[arg[0]] = 1;
 		}
-		else if(src < 0)
+		else if(arg[1] < 0)
 		{
-			vm.c[dst] = -1;
+			vm.c[arg[0]] = -1;
 		}
-		else vm.c[dst] = 0;
+		else vm.c[arg[0]] = 0;
 		break;
 	case VM::reg:
-		if(src > 0)
+		if(arg[1] > 0)
 		{
-			vm.regs[dst] = 1;
+			vm.regs[arg[0]] = 1;
 		}
-		else if(src < 0)
+		else if(arg[1] < 0)
 		{
-			vm.regs[dst] = -1;
+			vm.regs[arg[0]] = -1;
 		}
-		else vm.regs[dst] = 0;
+		else vm.regs[arg[0]] = 0;
 		break;
 	}
 }
-void fsgn(word dst, word src) // floating-point instructions must wait for the implementation of variable-sized layout
+void fsgn() // floating-point instructions must wait for the implementation of variable-sized layout
 {
 	switch(vm.current_resource)
 	{
@@ -386,34 +410,43 @@ void fsgn(word dst, word src) // floating-point instructions must wait for the i
 	case VM::reg: break;
 	}
 }
-void lsgn(word dst, word src)
+void lsgn()
 {
 	switch(vm.current_resource)
 	{
 	case VM::ram:
-		if(src == gle_true) vm.mem.M[dst] = 1;
-		else vm.mem.M[dst] = -1;
+		if(arg[1] == gle_true) vm.mem.M[arg[0]] = 1;
+		else vm.mem.M[arg[0]] = -1;
 		break;
 	case VM::code:
-		if(src == gle_true) vm.c[dst] = 1;
-		else vm.c[dst] = -1;
+		if(arg[1] == gle_true) vm.c[arg[0]] = 1;
+		else vm.c[arg[0]] = -1;
 		break;
 	case VM::reg:
-		if(src == gle_true) vm.regs[dst] = 1;
-		else vm.regs[dst] = -1;
+		if(arg[1] == gle_true) vm.regs[arg[0]] = 1;
+		else vm.regs[arg[0]] = -1;
 		break;
 	}
 }
-void iabs(word dst, word src)
+void iabs()
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram: if(src < 0) vm.mem.M[dst] = -src; break;
-	case VM::code: if(src < 0) vm.c[dst] = -src; break;
-	case VM::reg: if(src < 0) vm.regs[dst] = -src; break;
+	case VM::ram:
+		if(arg[1] < 0) vm.mem.M[arg[0]] = -arg[1];
+		else vm.mem.M[arg[0]] = arg[1];
+		break;
+	case VM::code:
+		if(arg[1] < 0) vm.c[arg[0]] = -arg[1];
+		else vm.c[arg[0]] = arg[1];
+		break;
+	case VM::reg:
+		if(arg[1] < 0) vm.regs[arg[0]] = -arg[1];
+		else vm.regs[arg[0]] = arg[1];
+		break;
 	}
 }
-void fabs(word dst, word src) // floating-point instructions must wait for the implementation of variable-sized layout
+void fabs() // floating-point instructions must wait for the implementation of variable-sized layout
 {
 	switch(vm.current_resource)
 	{
@@ -422,40 +455,128 @@ void fabs(word dst, word src) // floating-point instructions must wait for the i
 	case VM::reg: break;
 	}
 }
-void labs(word dst, word src)
+void labs()
 {
 	switch(vm.current_resource)
 	{
 	case VM::ram:
-		if(src == gle_true) vm.mem.M[dst] = 1;
-		else vm.mem.M[dst] = -1;
+		if(arg[1] == gle_true) vm.mem.M[arg[0]] = 1;
+		else vm.mem.M[arg[0]] = -1;
 		break;
 	case VM::code:
-		if(src == gle_true) vm.c[dst] = 1;
-		else vm.c[dst] = -1;
+		if(arg[1] == gle_true) vm.c[arg[0]] = 1;
+		else vm.c[arg[0]] = -1;
 		break;
 	case VM::reg:
-		if(src == gle_true) vm.regs[dst] = 1;
-		else vm.regs[dst] = -1;
+		if(arg[1] == gle_true) vm.regs[arg[0]] = 1;
+		else vm.regs[arg[0]] = -1;
 		break;
+	}
+}
+void bor()
+{
+	switch(vm.current_resource)
+	{
+	case VM::ram: vm.mem.M[arg[0]] = arg[1] | arg[2]; break;
+	case VM::code: vm.c[arg[0]] = arg[1] | arg[2]; break;
+	case VM::reg: vm.regs[arg[0]] = arg[1] | arg[2]; break;
+	}
+}
+void band()
+{
+	switch(vm.current_resource)
+	{
+	case VM::ram: vm.mem.M[arg[0]] = arg[1] & arg[2]; break;
+	case VM::code: vm.c[arg[0]] = arg[1] & arg[2]; break;
+	case VM::reg: vm.regs[arg[0]] = arg[1] & arg[2]; break;
+	}
+}
+void bxor()
+{
+	switch(vm.current_resource)
+	{
+	case VM::ram: vm.mem.M[arg[0]] = arg[1] ^ arg[2]; break;
+	case VM::code: vm.c[arg[0]] = arg[1] ^ arg[2]; break;
+	case VM::reg: vm.regs[arg[0]] = arg[1] ^ arg[2]; break;
+	}
+}
+void ishl()
+{
+	switch(vm.current_resource)
+	{
+	case VM::ram: vm.mem.M[arg[0]] = arg[1] << arg[2]; break;
+	case VM::code: vm.c[arg[0]] = arg[1] << arg[2]; break;
+	case VM::reg: vm.regs[arg[0]] = arg[1] << arg[2]; break;
+	}
+}
+void fshl()
+{
+	switch(vm.current_resource)
+	{
+	case VM::ram: break;
+	case VM::code: break;
+	case VM::reg: break;
+	}
+}
+void lshl()
+{
+	// Does it make sense?
+}
+void ishr()
+{
+	switch(vm.current_resource)
+	{
+	case VM::ram: vm.mem.M[arg[0]] = arg[1] >> arg[2]; break;
+	case VM::code: vm.c[arg[0]] = arg[1] >> arg[2]; break;
+	case VM::reg: vm.regs[arg[0]] = arg[1] >> arg[2]; break;
+	}
+}
+void fshr()
+{
+	switch(vm.current_resource)
+	{
+	case VM::ram: break;
+	case VM::code: break;
+	case VM::reg: break;
+	}
+}
+void lshr()
+{
+	// Does it make sense?
+}
+void bnot()
+{
+	switch(vm.current_resource)
+	{
+	case VM::ram: vm.mem.M[arg[0]] = ~arg[1]; break;
+	case VM::code: vm.c[arg[0]] = ~arg[1]; break;
+	case VM::reg: vm.regs[arg[0]] = ~arg[1]; break;
 	}
 }
 
-#define ADDR_MODE(name) auto name = vm.c[vm.ip++]
-#define OPERAND_IN(name, mode) auto name = exec_argument_in(vm.c[vm.ip++], mode)
-#define OPERAND_OUT(name, mode) auto name = exec_argument_out(vm.c[vm.ip++], mode)
 
-void unary_instr(const std::string& mnemonic, word mode, word arg)
+#define ADDR_MODE(i)\
+auto meta##i = vm.c[vm.ip++];\
+res[i] = meta##i >> 5;\
+mode[i] = meta##i & 0x1F;
+
+#define OPERAND_IN(i) arg[i] = exec_argument(vm.c[vm.ip++], mode[i], res[i]);
+#define OPERAND_OUT(i) arg[i] = exec_argument(vm.c[vm.ip++], mode[i], res[i]);
+
+void unary_instr(const std::string& mnemonic)
 {
-	std::cout << mnemonic << " " << (int)mode << " " << (int)arg << "\n";
+	std::cout << mnemonic << " " << (int)res[0] << " " << (int)mode[0] << ", " << (int)arg[0] << "\n";
 }
-void binary_instr(const std::string& mnemonic, word mode_1, word mode_2, word arg_1, word arg_2)
+void binary_instr(const std::string& mnemonic)
 {
-	std::cout << mnemonic << " " << (int)mode_1 << " " << (int)mode_2 << " " << ", " << (int)arg_1 << ", " << (int)arg_2 << "\n";
+	std::cout << mnemonic << " " << (int)res[0] << " " << (int)mode[0]
+						  << " " << (int)res[1] << " " << (int)mode[1] << ", " << (int)arg[0] << ", " << (int)arg[1] << "\n";
 }
-void ternary_instr(const std::string& mnemonic, word mode_1, word mode_2, word mode_3, word arg_1, word arg_2, word arg_3)
+void ternary_instr(const std::string& mnemonic)
 {
-	std::cout << mnemonic << " " << (int)mode_1 << " " << (int)mode_2 << " " << (int)mode_3 << ", " << (int)arg_1 << ", " << (int)arg_2 << ", " << (int)arg_3 << "\n";
+	std::cout << mnemonic << " " << (int)res[0] << " " << (int)mode[0]
+						  << " " << (int)res[1] << " " << (int)mode[1]
+						  << " " << (int)res[2] << " " << (int)mode[2] << ", " << (int)arg[0] << ", " << (int)arg[1] << ", " << (int)arg[2] << "\n";
 }
 exec_res vm_run()
 {
@@ -480,342 +601,458 @@ exec_res vm_run()
 		{
 		case OP_STPUSH:
 		{
-			ADDR_MODE(mode);
-			OPERAND_IN(arg, mode);
-			stpush(arg);
-			if(vm.debug_mode) unary_instr("stpush", mode, vm.c[vm.ip - 1]);
+			ADDR_MODE(0)
+			OPERAND_IN(0)
+			stpush();
+			if(vm.debug_mode) unary_instr("stpush");
 			break;
 		}
 		case OP_STPOP:
 		{
-			ADDR_MODE(mode);
-			OPERAND_OUT(dst, mode);
-			stpop(dst);
-			if(vm.debug_mode) unary_instr("stpop", mode, vm.c[vm.ip - 1]);
+			ADDR_MODE(0)
+			OPERAND_OUT(0)
+			stpop();
+			if(vm.debug_mode) unary_instr("stpop");
 			break;
 		}
 		case OP_STTOP:
 		{
-			ADDR_MODE(mode);
-			OPERAND_OUT(dst, mode);
-			sttop(dst);
-			if(vm.debug_mode) unary_instr("sttop", mode, vm.c[vm.ip - 1]);
+			ADDR_MODE(0)
+			OPERAND_OUT(0)
+			sttop();
+			if(vm.debug_mode) unary_instr("sttop");
 			break;
 		}
 		case OP_STGET:
 		{
-			ADDR_MODE(mode_1);
-			ADDR_MODE(mode_2);
-			OPERAND_OUT(dst, mode_1);
-			OPERAND_IN(idx, mode_2);
-			stget(dst, idx);
-			if(vm.debug_mode) binary_instr("stget", mode_1, mode_2, vm.c[vm.ip - 2], vm.c[vm.ip - 1]);
+			ADDR_MODE(0)
+			ADDR_MODE(1)
+			OPERAND_OUT(0)
+			OPERAND_IN(1)
+			stget();
+			if(vm.debug_mode) binary_instr("stget");
 			break;
 		}
 		case OP_INEG:
 		{
-			ADDR_MODE(mode_1);
-			ADDR_MODE(mode_2);
-			OPERAND_OUT(dst, mode_1);
-			OPERAND_IN(src, mode_2);
-			ineg(dst, src);
-			if(vm.debug_mode) binary_instr("ineg", mode_1, mode_2, vm.c[vm.ip - 2], vm.c[vm.ip - 1]);
+			ADDR_MODE(0)
+			ADDR_MODE(1)
+			OPERAND_OUT(0)
+			OPERAND_IN(1)
+			ineg();
+			if(vm.debug_mode) binary_instr("ineg");
 			break;
 		}
 		case OP_FNEG:
 		{
-			ADDR_MODE(mode_1);
-			ADDR_MODE(mode_2);
-			OPERAND_OUT(dst, mode_1);
-			OPERAND_IN(src, mode_2);
-			fneg(dst, src);
-			if(vm.debug_mode) binary_instr("fneg", mode_1, mode_2, vm.c[vm.ip - 2], vm.c[vm.ip - 1]);
+			ADDR_MODE(0)
+			ADDR_MODE(1)
+			OPERAND_OUT(1)
+			OPERAND_IN(0)
+			fneg();
+			if(vm.debug_mode) binary_instr("fneg");
 			break;
 		}
 		case OP_LNEG:
 		{
-			ADDR_MODE(mode_1);
-			ADDR_MODE(mode_2);
-			OPERAND_OUT(dst, mode_1);
-			OPERAND_IN(src, mode_2);
-			lneg(dst, src);
-			if(vm.debug_mode) binary_instr("lneg", mode_1, mode_2, vm.c[vm.ip - 2], vm.c[vm.ip - 1]);
+			ADDR_MODE(0)
+			ADDR_MODE(1)
+			OPERAND_OUT(0)
+			OPERAND_IN(1)
+			lneg();
+			if(vm.debug_mode) binary_instr("lneg");
 			break;
 		}
 		case OP_IADD:
 		{
-			ADDR_MODE(mode_1);
-			ADDR_MODE(mode_2);
-			ADDR_MODE(mode_3);
-			OPERAND_OUT(dst, mode_1);
-			OPERAND_IN(lhs, mode_2);
-			OPERAND_IN(rhs, mode_3);
-			iadd(dst, lhs, rhs);
-			if(vm.debug_mode) ternary_instr("iadd", mode_1, mode_2, mode_3, vm.c[vm.ip - 3], vm.c[vm.ip - 2], vm.c[vm.ip - 1]);
+			ADDR_MODE(0)
+			ADDR_MODE(1)
+			ADDR_MODE(2)
+			OPERAND_OUT(0)
+			OPERAND_IN(1)
+			OPERAND_IN(2)
+			iadd();
+			if(vm.debug_mode) ternary_instr("iadd");
 			break;
 		}
 		case OP_FADD:
 		{
-			ADDR_MODE(mode_1);
-			ADDR_MODE(mode_2);
-			ADDR_MODE(mode_3);
-			OPERAND_OUT(dst, mode_1);
-			OPERAND_IN(lhs, mode_2);
-			OPERAND_IN(rhs, mode_3);
-			fadd(dst, lhs, rhs);
-			if(vm.debug_mode) ternary_instr("fadd", mode_1, mode_2, mode_3, vm.c[vm.ip - 3], vm.c[vm.ip - 2], vm.c[vm.ip - 1]);
+			ADDR_MODE(0)
+			ADDR_MODE(1)
+			ADDR_MODE(2)
+			OPERAND_OUT(0)
+			OPERAND_IN(1)
+			OPERAND_IN(2)
+			fadd();
+			if(vm.debug_mode) ternary_instr("fadd");
 			break;
 		}
 		case OP_LADD:
 		{
-			ADDR_MODE(mode_1);
-			ADDR_MODE(mode_2);
-			ADDR_MODE(mode_3);
-			OPERAND_OUT(dst, mode_1);
-			OPERAND_IN(lhs, mode_2);
-			OPERAND_IN(rhs, mode_3);
-			ladd(dst, lhs, rhs);
-			if(vm.debug_mode) ternary_instr("ladd", mode_1, mode_2, mode_3, vm.c[vm.ip - 3], vm.c[vm.ip - 2], vm.c[vm.ip - 1]);
+			ADDR_MODE(0)
+			ADDR_MODE(1)
+			ADDR_MODE(2)
+			OPERAND_OUT(0)
+			OPERAND_IN(1)
+			OPERAND_IN(2)
+			ladd();
+			if(vm.debug_mode) ternary_instr("ladd");
 			break;
 		}
 		case OP_ISUB:
 		{
-			ADDR_MODE(mode_1);
-			ADDR_MODE(mode_2);
-			ADDR_MODE(mode_3);
-			OPERAND_OUT(dst, mode_1);
-			OPERAND_IN(lhs, mode_2);
-			OPERAND_IN(rhs, mode_3);
-			isub(dst, lhs, rhs);
-			if(vm.debug_mode) ternary_instr("isub", mode_1, mode_2, mode_3, vm.c[vm.ip - 3], vm.c[vm.ip - 2], vm.c[vm.ip - 1]);
+			ADDR_MODE(0)
+			ADDR_MODE(1)
+			ADDR_MODE(2)
+			OPERAND_OUT(0)
+			OPERAND_IN(1)
+			OPERAND_IN(2)
+			isub();
+			if(vm.debug_mode) ternary_instr("isub");
 			break;
 		}
 		case OP_FSUB:
 		{
-			ADDR_MODE(mode_1);
-			ADDR_MODE(mode_2);
-			ADDR_MODE(mode_3);
-			OPERAND_OUT(dst, mode_1);
-			OPERAND_IN(lhs, mode_2);
-			OPERAND_IN(rhs, mode_3);
-			fsub(dst, lhs, rhs);
-			if(vm.debug_mode) ternary_instr("fsub", mode_1, mode_2, mode_3, vm.c[vm.ip - 3], vm.c[vm.ip - 2], vm.c[vm.ip - 1]);
+			ADDR_MODE(0)
+			ADDR_MODE(1)
+			ADDR_MODE(2)
+			OPERAND_OUT(0)
+			OPERAND_IN(1)
+			OPERAND_IN(2)
+			fsub();
+			if(vm.debug_mode) ternary_instr("fsub");
 			break;
 		}
 		case OP_LSUB:
 		{
-			ADDR_MODE(mode_1);
-			ADDR_MODE(mode_2);
-			ADDR_MODE(mode_3);
-			OPERAND_OUT(dst, mode_1);
-			OPERAND_IN(lhs, mode_2);
-			OPERAND_IN(rhs, mode_3);
-			lsub(dst, lhs, rhs);
-			if(vm.debug_mode) ternary_instr("lsub", mode_1, mode_2, mode_3, vm.c[vm.ip - 3], vm.c[vm.ip - 2], vm.c[vm.ip - 1]);
+			ADDR_MODE(0)
+			ADDR_MODE(1)
+			ADDR_MODE(2)
+			OPERAND_OUT(0)
+			OPERAND_IN(1)
+			OPERAND_IN(2)
+			lsub();
+			if(vm.debug_mode) ternary_instr("lsub");
 			break;
 		}
 		case OP_IMUL:
 		{
-			ADDR_MODE(mode_1);
-			ADDR_MODE(mode_2);
-			ADDR_MODE(mode_3);
-			OPERAND_OUT(dst, mode_1);
-			OPERAND_IN(lhs, mode_2);
-			OPERAND_IN(rhs, mode_3);
-			imul(dst, lhs, rhs);
-			if(vm.debug_mode) ternary_instr("imul", mode_1, mode_2, mode_3, vm.c[vm.ip - 3], vm.c[vm.ip - 2], vm.c[vm.ip - 1]);
+			ADDR_MODE(0)
+			ADDR_MODE(1)
+			ADDR_MODE(2)
+			OPERAND_OUT(0)
+			OPERAND_IN(1)
+			OPERAND_IN(2)
+			imul();
+			if(vm.debug_mode) ternary_instr("imul");
 			break;
 		}
 		case OP_FMUL:
 		{
-			ADDR_MODE(mode_1);
-			ADDR_MODE(mode_2);
-			ADDR_MODE(mode_3);
-			OPERAND_OUT(dst, mode_1);
-			OPERAND_IN(lhs, mode_2);
-			OPERAND_IN(rhs, mode_3);
-			fmul(dst, lhs, rhs);
-			if(vm.debug_mode) ternary_instr("fmul", mode_1, mode_2, mode_3, vm.c[vm.ip - 3], vm.c[vm.ip - 2], vm.c[vm.ip - 1]);
+			ADDR_MODE(0)
+			ADDR_MODE(1)
+			ADDR_MODE(2)
+			OPERAND_OUT(0)
+			OPERAND_IN(1)
+			OPERAND_IN(2)
+			fmul();
+			if(vm.debug_mode) ternary_instr("fmul");
 			break;
 		}
 		case OP_LMUL:
 		{
-			ADDR_MODE(mode_1);
-			ADDR_MODE(mode_2);
-			ADDR_MODE(mode_3);
-			OPERAND_OUT(dst, mode_1);
-			OPERAND_IN(lhs, mode_2);
-			OPERAND_IN(rhs, mode_3);
-			lmul(dst, lhs, rhs);
-			if(vm.debug_mode) ternary_instr("lmul", mode_1, mode_2, mode_3, vm.c[vm.ip - 3], vm.c[vm.ip - 2], vm.c[vm.ip - 1]);
+			ADDR_MODE(0)
+			ADDR_MODE(1)
+			ADDR_MODE(2)
+			OPERAND_OUT(0)
+			OPERAND_IN(1)
+			OPERAND_IN(2)
+			lmul();
+			if(vm.debug_mode) ternary_instr("lmul");
 			break;
 		}
 		case OP_IDIV:
 		{
-			ADDR_MODE(mode_1);
-			ADDR_MODE(mode_2);
-			ADDR_MODE(mode_3);
-			OPERAND_OUT(dst, mode_1);
-			OPERAND_IN(lhs, mode_2);
-			OPERAND_IN(rhs, mode_3);
-			idiv(dst, lhs, rhs);
-			if(vm.debug_mode) ternary_instr("idikv", mode_1, mode_2, mode_3, vm.c[vm.ip - 3], vm.c[vm.ip - 2], vm.c[vm.ip - 1]);
+			ADDR_MODE(0)
+			ADDR_MODE(1)
+			ADDR_MODE(2)
+			OPERAND_OUT(0)
+			OPERAND_IN(1)
+			OPERAND_IN(2)
+			idiv();
+			if(vm.debug_mode) ternary_instr("idiv");
 			break;
 		}
 		case OP_FDIV:
 		{
-			ADDR_MODE(mode_1);
-			ADDR_MODE(mode_2);
-			ADDR_MODE(mode_3);
-			OPERAND_OUT(dst, mode_1);
-			OPERAND_IN(lhs, mode_2);
-			OPERAND_IN(rhs, mode_3);
-			fdiv(dst, lhs, rhs);
-			if(vm.debug_mode) ternary_instr("fdiv", mode_1, mode_2, mode_3, vm.c[vm.ip - 3], vm.c[vm.ip - 2], vm.c[vm.ip - 1]);
+			ADDR_MODE(0)
+			ADDR_MODE(1)
+			ADDR_MODE(2)
+			OPERAND_OUT(0)
+			OPERAND_IN(1)
+			OPERAND_IN(2)
+			fdiv();
+			if(vm.debug_mode) ternary_instr("fdiv");
 			break;
 		}
 		case OP_LDIV:
 		{
-			ADDR_MODE(mode_1);
-			ADDR_MODE(mode_2);
-			ADDR_MODE(mode_3);
-			OPERAND_OUT(dst, mode_1);
-			OPERAND_IN(lhs, mode_2);
-			OPERAND_IN(rhs, mode_3);
-			ldiv(dst, lhs, rhs);
-			if(vm.debug_mode) ternary_instr("ldiv", mode_1, mode_2, mode_3, vm.c[vm.ip - 3], vm.c[vm.ip - 2], vm.c[vm.ip - 1]);
+			ADDR_MODE(0)
+			ADDR_MODE(1)
+			ADDR_MODE(2)
+			OPERAND_OUT(0)
+			OPERAND_IN(1)
+			OPERAND_IN(2)
+			ldiv();
+			if(vm.debug_mode) ternary_instr("ldiv");
 			break;
 		}
 		case OP_IMOD:
 		{
-			ADDR_MODE(mode_1);
-			ADDR_MODE(mode_2);
-			ADDR_MODE(mode_3);
-			OPERAND_OUT(dst, mode_1);
-			OPERAND_IN(lhs, mode_2);
-			OPERAND_IN(rhs, mode_3);
-			imod(dst, lhs, rhs);
-			if(vm.debug_mode) ternary_instr("imod", mode_1, mode_2, mode_3, vm.c[vm.ip - 3], vm.c[vm.ip - 2], vm.c[vm.ip - 1]);
+			ADDR_MODE(0)
+			ADDR_MODE(1)
+			ADDR_MODE(2)
+			OPERAND_OUT(0)
+			OPERAND_IN(1)
+			OPERAND_IN(2)
+			imod();
+			if(vm.debug_mode) ternary_instr("imod");
 			break;
 		}
 		case OP_IINC:
 		{
-			ADDR_MODE(mode_1);
-			ADDR_MODE(mode_2);
-			OPERAND_OUT(dst, mode_1);
-			OPERAND_IN(src, mode_2);
-			iinc(dst, src);
-			if(vm.debug_mode) binary_instr("iinc", mode_1, mode_2, vm.c[vm.ip - 2], vm.c[vm.ip - 1]);
+			ADDR_MODE(0)
+			ADDR_MODE(1)
+			OPERAND_OUT(0)
+			OPERAND_IN(1)
+			iinc();
+			if(vm.debug_mode) binary_instr("iinc");
 			break;
 		}
 		case OP_FINC:
 		{
-			ADDR_MODE(mode_1);
-			ADDR_MODE(mode_2);
-			OPERAND_OUT(dst, mode_1);
-			OPERAND_IN(src, mode_2);
-			finc(dst, src);
-			if(vm.debug_mode) binary_instr("finc", mode_1, mode_2, vm.c[vm.ip - 2], vm.c[vm.ip - 1]);
+			ADDR_MODE(0)
+			ADDR_MODE(1)
+			OPERAND_OUT(0)
+			OPERAND_IN(1)
+			finc();
+			if(vm.debug_mode) binary_instr("finc");
 			break;
 		}
 		case OP_LINC:
 		{
-			ADDR_MODE(mode_1);
-			ADDR_MODE(mode_2);
-			OPERAND_OUT(dst, mode_1);
-			OPERAND_IN(src, mode_2);
-			linc(dst, src);
-			if(vm.debug_mode) binary_instr("linc", mode_1, mode_2, vm.c[vm.ip - 2], vm.c[vm.ip - 1]);
+			ADDR_MODE(0)
+			OPERAND_OUT(0)
+			linc();
+			if(vm.debug_mode) binary_instr("linc");
 			break;
 		}
 		case OP_IDEC:
 		{
-			ADDR_MODE(mode_1);
-			ADDR_MODE(mode_2);
-			OPERAND_OUT(dst, mode_1);
-			OPERAND_IN(src, mode_2);
-			idec(dst, src);
-			if(vm.debug_mode) binary_instr("idec", mode_1, mode_2, vm.c[vm.ip - 2], vm.c[vm.ip - 1]);
+			ADDR_MODE(0)
+			ADDR_MODE(1)
+			OPERAND_OUT(0)
+			OPERAND_IN(1)
+			idec();
+			if(vm.debug_mode) binary_instr("idec");
 			break;
 		}
 		case OP_FDEC:
 		{
-			ADDR_MODE(mode_1);
-			ADDR_MODE(mode_2);
-			OPERAND_OUT(dst, mode_1);
-			OPERAND_IN(src, mode_2);
-			fdec(dst, src);
-			if(vm.debug_mode) binary_instr("fdec", mode_1, mode_2, vm.c[vm.ip - 2], vm.c[vm.ip - 1]);
+			ADDR_MODE(0)
+			ADDR_MODE(1)
+			OPERAND_OUT(0)
+			OPERAND_IN(1)
+			fdec();
+			if(vm.debug_mode) binary_instr("fdec");
 			break;
 		}
 		case OP_LDEC:
 		{
-			ADDR_MODE(mode_1);
-			ADDR_MODE(mode_2);
-			OPERAND_OUT(dst, mode_1);
-			OPERAND_IN(src, mode_2);
-			ldec(dst, src);
-			if(vm.debug_mode) binary_instr("ldec", mode_1, mode_2, vm.c[vm.ip - 2], vm.c[vm.ip - 1]);
+			ADDR_MODE(0)
+			ADDR_MODE(1)
+			OPERAND_OUT(0)
+			OPERAND_IN(1)
+			ldec();
+			if(vm.debug_mode) binary_instr("ldec");
 			break;
 		}
 		case OP_ISGN:
 		{
-			ADDR_MODE(mode_1);
-			ADDR_MODE(mode_2);
-			OPERAND_OUT(dst, mode_1);
-			OPERAND_IN(src, mode_2);
-			isgn(dst, src);
-			if(vm.debug_mode) binary_instr("isgn", mode_1, mode_2, vm.c[vm.ip - 2], vm.c[vm.ip - 1]);
+			ADDR_MODE(0)
+			ADDR_MODE(1)
+			OPERAND_OUT(0)
+			OPERAND_IN(1)
+			isgn();
+			if(vm.debug_mode) binary_instr("isgn");
 			break;
 		}
 		case OP_FSGN:
 		{
-			ADDR_MODE(mode_1);
-			ADDR_MODE(mode_2);
-			OPERAND_OUT(dst, mode_1);
-			OPERAND_IN(src, mode_2);
-			fsgn(dst, src);
-			if(vm.debug_mode) binary_instr("isgn", mode_1, mode_2, vm.c[vm.ip - 2], vm.c[vm.ip - 1]);
+			ADDR_MODE(0)
+			ADDR_MODE(1)
+			OPERAND_OUT(0)
+			OPERAND_IN(1)
+			fsgn();
+			if(vm.debug_mode) binary_instr("isgn");
 			break;
 		}
 		case OP_LSGN:
 		{
-			ADDR_MODE(mode_1);
-			ADDR_MODE(mode_2);
-			OPERAND_OUT(dst, mode_1);
-			OPERAND_IN(src, mode_2);
-			lsgn(dst, src);
-			if(vm.debug_mode) binary_instr("isgn", mode_1, mode_2, vm.c[vm.ip - 2], vm.c[vm.ip - 1]);
+			ADDR_MODE(0)
+			ADDR_MODE(1)
+			OPERAND_OUT(0)
+			OPERAND_IN(1)
+			lsgn();
+			if(vm.debug_mode) binary_instr("isgn");
 			break;
 		}
 		case OP_IABS:
 		{
-			ADDR_MODE(mode_1);
-			ADDR_MODE(mode_2);
-			OPERAND_OUT(dst, mode_1);
-			OPERAND_IN(src, mode_2);
-			iabs(dst, src);
-			if(vm.debug_mode) binary_instr("isgn", mode_1, mode_2, vm.c[vm.ip - 2], vm.c[vm.ip - 1]);
+			ADDR_MODE(0)
+			ADDR_MODE(1)
+			OPERAND_OUT(0)
+			OPERAND_IN(1)
+			iabs();
+			if(vm.debug_mode) binary_instr("isgn");
 			break;
 		}
 		case OP_FABS:
 		{
-			ADDR_MODE(mode_1);
-			ADDR_MODE(mode_2);
-			OPERAND_OUT(dst, mode_1);
-			OPERAND_IN(src, mode_2);
-			fabs(dst, src);
-			if(vm.debug_mode) binary_instr("isgn", mode_1, mode_2, vm.c[vm.ip - 2], vm.c[vm.ip - 1]);
+			ADDR_MODE(0)
+			ADDR_MODE(1)
+			OPERAND_OUT(0)
+			OPERAND_IN(1)
+			fabs();
+			if(vm.debug_mode) binary_instr("isgn");
 			break;
 		}
 		case OP_LABS:
 		{
-			ADDR_MODE(mode_1);
-			ADDR_MODE(mode_2);
-			OPERAND_OUT(dst, mode_1);
-			OPERAND_IN(src, mode_2);
-			labs(dst, src);
-			if(vm.debug_mode) binary_instr("isgn", mode_1, mode_2, vm.c[vm.ip - 2], vm.c[vm.ip - 1]);
+			ADDR_MODE(0)
+			ADDR_MODE(1)
+			OPERAND_OUT(0)
+			OPERAND_IN(1)
+			labs();
+			if(vm.debug_mode) binary_instr("isgn");
+			break;
+		}
+		case OP_BOR:
+		{
+			ADDR_MODE(0)
+			ADDR_MODE(1)
+			ADDR_MODE(2)
+			OPERAND_OUT(0)
+			OPERAND_IN(1)
+			OPERAND_IN(2)
+			bor();
+			if(vm.debug_mode) ternary_instr("bor");
+			break;
+		}
+		case OP_BAND:
+		{
+			ADDR_MODE(0)
+			ADDR_MODE(1)
+			ADDR_MODE(2)
+			OPERAND_OUT(0)
+			OPERAND_IN(1)
+			OPERAND_IN(2)
+			band();
+			if(vm.debug_mode) ternary_instr("band");
+			break;
+		}
+		case OP_BXOR:
+		{
+			ADDR_MODE(0)
+			ADDR_MODE(1)
+			ADDR_MODE(2)
+			OPERAND_OUT(0)
+			OPERAND_IN(1)
+			OPERAND_IN(2)
+			bxor();
+			if(vm.debug_mode) ternary_instr("bxor");
+			break;
+		}
+		case OP_ISHL:
+		{
+			ADDR_MODE(0)
+			ADDR_MODE(1)
+			ADDR_MODE(2)
+			OPERAND_OUT(0)
+			OPERAND_IN(1)
+			OPERAND_IN(2)
+			ishl();
+			if(vm.debug_mode) ternary_instr("ishl");
+			break;
+		}
+		case OP_FSHL:
+		{
+			ADDR_MODE(0)
+			ADDR_MODE(1)
+			ADDR_MODE(2)
+			OPERAND_OUT(0)
+			OPERAND_IN(1)
+			OPERAND_IN(2)
+			fshl();
+			if(vm.debug_mode) ternary_instr("fshl");
+			break;
+		}
+		case OP_LSHL:
+		{
+			ADDR_MODE(0)
+			ADDR_MODE(1)
+			ADDR_MODE(2)
+			OPERAND_OUT(0)
+			OPERAND_IN(1)
+			OPERAND_IN(2)
+			lshl();
+			if(vm.debug_mode) ternary_instr("lshl");
+			break;
+		}
+		case OP_ISHR:
+		{
+			ADDR_MODE(0)
+			ADDR_MODE(1)
+			ADDR_MODE(2)
+			OPERAND_OUT(0)
+			OPERAND_IN(1)
+			OPERAND_IN(2)
+			ishr();
+			if(vm.debug_mode) ternary_instr("ishr");
+			break;
+		}
+		case OP_FSHR:
+		{
+			ADDR_MODE(0)
+			ADDR_MODE(1)
+			ADDR_MODE(2)
+			OPERAND_OUT(0)
+			OPERAND_IN(1)
+			OPERAND_IN(2)
+			fshr();
+			if(vm.debug_mode) ternary_instr("fshr");
+			break;
+		}
+		case OP_LSHR:
+		{
+			ADDR_MODE(0)
+			ADDR_MODE(1)
+			ADDR_MODE(2)
+			OPERAND_OUT(0)
+			OPERAND_IN(1)
+			OPERAND_IN(2)
+			lshr();
+			if(vm.debug_mode) ternary_instr("lshr");
+			break;
+		}
+		case OP_BNOT:
+		{
+			ADDR_MODE(0)
+			ADDR_MODE(1)
+			OPERAND_OUT(0)
+			OPERAND_IN(1)
+			bnot();
+			if(vm.debug_mode) binary_instr("bnot");
 			break;
 		}
 		default:
