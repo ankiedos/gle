@@ -10,11 +10,12 @@ ind_addr& ind_addr::operator =(const ind_addr& other)
 	return *this;
 }
 
-void mem_init(memory& m, std::size_t ram_size, std::size_t stack_size)
+void mem_init(memory& m, std::size_t heap_size, std::size_t data_size, std::size_t stack_size)
 {
 	m.stack.resize(stack_size);
-	m.M.resize(ram_size);
-	m.IAT.resize(ram_size / 2);
+	m.heap.resize(heap_size);
+	m.data.resize(data_size);
+	m.IAT.resize(heap_size / 2);
 	m.head = m.tail = 0;
 	m.free_frms = {};
 	m.free_frms_sz = {};
@@ -70,9 +71,9 @@ void mem_free(memory& m, word b, word counter, word size)
 	{
 		m.IAT[m.tail] = b; m.IAT[b] = 0; m.tail = b;
 	}
-	if(d + size == m.M.size())
+	if(d + size == m.heap.size())
 	{
-		m.M.resize(m.M.size() - size);
+		m.heap.resize(m.heap.size() - size);
 	}
 	else insert(m, size, d);
 	if(m.compactify_f == m.free_op_count)
@@ -105,11 +106,11 @@ void mem_new(memory& m, word s, word* b, word* counter)
 	}
 	else
 	{
-		auto old_sz = m.M.size();
-		m.M.resize(m.M.size() + s, 0);
+		auto old_sz = m.heap.size();
+		m.heap.resize(m.heap.size() + s, 0);
 		d = old_sz;
 		*counter = 0;
-		m.M[d + 1] = s;
+		m.heap[d + 1] = s;
 	}
 }
 
@@ -123,12 +124,12 @@ static word search_iat_by_d(memory& m, word d)
 }
 void compact_fs(memory& m, std::size_t i)
 {
-	// Jezeli dana ramka graniczy z inna ramka wolnej przestrzeni
+	// If the given frame shares a boundary with another free space frame
 	if(m.free_frms[i] + m.free_frms_sz[i] == m.free_frms[i + 1])
 	{
-		// Zwieksz rozmiar tej ramki
+		// Increase the frame's size
 		m.free_frms_sz[i] += m.free_frms_sz[i + 1];
-		// I usun z rejestru nastepna
+		// And delete the next from the registry
 		m.free_frms.erase(m.free_frms.begin() + i + 1);
 		m.free_frms_sz.erase(m.free_frms_sz.begin() + i + 1);
 	}
@@ -140,12 +141,12 @@ void compact_fs(memory& m)
 	{
 		compact_fs(m, i);
 	}
-	// Jezeli ramka graniczy z niezaalokowana przestrzenia
-	// Usun ramke z rejestru i zmniejsz odpowiednio LastUsed
+	// If the frame shares a boundary with unallocated space
+	// Delete the frame from the registry
 	auto size = m.free_frms.size();
-	if(m.free_frms[size - 1] + m.free_frms_sz[size - 1] == m.M.size())
+	if(m.free_frms[size - 1] + m.free_frms_sz[size - 1] == m.heap.size())
 	{
-		m.M.resize(m.free_frms[size - 1] - 1);
+		m.heap.resize(m.free_frms[size - 1] - 1);
 		m.free_frms.erase(m.free_frms.begin() + size - 1);
 		m.free_frms_sz.erase(m.free_frms_sz.begin() + size - 1);
 	}
@@ -155,82 +156,83 @@ void compact_ins(memory& m)
 {
 	for(std::size_t i = 0; i < m.free_frms.size(); i++)
 	{
-		// Uzyskaj wskaznik do obecnej ramki wolnej przestrzeni
+		// Get the pointer to the current free space frame
 		auto freeptr = m.free_frms[i];
-		// Oraz jej rozmiar
+		// And its size
 		auto freeptr_sz = m.free_frms_sz[i];
 
-		// Uzyskaj tez wskaznik na nastepna ramke w INS (niekoniecznie wolnej przestrzeni)
+		// Get the pointer to the next INS frame (doesn't have to be in the free space), too
 		auto obj_addr = freeptr + freeptr_sz;
 
-		// Jezeli obecna ramka nie jest ostatnia
+		// If the current frame isn't last
 		if(i < m.free_frms.size() - 1)
 		{
-			// Oraz obj_addr jest poczatkiem nastepnej ramki wolnej przestrzeni
+			// And obj_addr is the beginning of the next free space frame
 			if(obj_addr == m.free_frms[i + 1])
 			{
+				// Compactify free space
 				compact_fs(m, i);
 			}
 		}
-		// Ale jesli obecna ramka graniczy z niezaalokowana przestrzenia (bo wskaznik ptr+size do niej nalezy)
-		else if(obj_addr == m.M.size())
+		// But if the current frame shares a boundary with unallocated space (because the location at ptr+size lies in it)
+		else if(obj_addr == m.heap.size())
 		{
-			// Zmniejsz LastUsed
-			m.M.resize(freeptr - 1);
-			// I usun ramke z rejestru
+			// Decrease the heap
+			m.heap.resize(freeptr - 1);
+			// And delete the frame from the registry
 			m.free_frms.erase(m.free_frms.begin() + i);
 			m.free_frms_sz.erase(m.free_frms_sz.begin() + i);
 			return;
 		}
 
-		// Jezeli mamy do czynienia z obiektem/ciagiem
-		if(m.M[obj_addr] == LO_OBJ)
+		// If it is an object or a string
+		if(m.heap[obj_addr] == LO_OBJ)
 		{
-			// Zeswapuj wszystkie elementy obiektu/ciagu z ramka
-			auto frame_sz = m.M[obj_addr + 1];
-			// gdy ramka jest wieksza:
+			// Swap all elements of the object/string and the frame with each other
+			auto frame_sz = m.heap[obj_addr + 1];
+			// when the frame is larger:
 			// [0 0 0 0 0 0] 0 1 2 a
 			//  0 1 2 a
-			// gdy ramka ma taki sam rozmiar:
+			// when the frame is of the same size:
 			// [0 0 0 0] 0 1 2 a
 			//  0 1 2 a
-			// gdy ramka jest mniejsza:
+			// when the frame is smaller:
 			// (frame_sz == 4)
-			//  0 1 2  3 4 5 6    j (zarazem offsety dla freeptr)
-			// -3-2-1  0 1 2 3    offsety dla obj_addr
+			//  0 1 2  3 4 5 6    j (also the offsets for freeptr)
+			// -3-2-1  0 1 2 3    offsets for obj_addr
 			// [0 0 0] 0 1 2 a
 			// dla j == 3
-			// m.M[freeptr + 3] = m.M[obj_addr + 3]
-			// zatem ten podalgorytm jest poprawny
+			// m.heap[freeptr + 3] = m.heap[obj_addr + 3]
+			// therefor this subalgorithm is correct
 			for(word j = 0; j < frame_sz; j++)
 			{
-				m.M[freeptr + j] = m.M[obj_addr + j];
+				m.heap[freeptr + j] = m.heap[obj_addr + j];
 			}
 		}
-		// Jezeli natomiast mamy do czynienia z niebezposrednim wskaznikiem
-		else if(m.M[obj_addr] == LO_PTR)
+		// However, if this is an indirect pointer
+		else if(m.heap[obj_addr] == LO_PTR)
 		{
-			// Zeswapuj b i counter z dwoma pierwszymi elementami ramki
-			m.M[freeptr] = m.M[obj_addr];
-			m.M[freeptr + 1] = m.M[obj_addr + 1];
+			// Swap b and counter with the first two frame's elements
+			m.heap[freeptr] = m.heap[obj_addr];
+			m.heap[freeptr + 1] = m.heap[obj_addr + 1];
 		}
-		// Jezeli natomiast mamy do czynienia z wartoscia wielkosci slowa
-		else if(m.M[obj_addr] == LO_VAL)
+		// However, if this is a raw value
+		else if(m.heap[obj_addr] == LO_VAL)
 		{
-			// Zeswapuj to slowo z pierwszym elementem ramki
-			m.M[freeptr] = m.M[obj_addr];
+			// Swap it with the first frame's element
+			m.heap[freeptr] = m.heap[obj_addr];
 		}
-		// Nastepne warunki dla wartosci wiekszych niz slowo
-		// tego srodowiska uruchomieniowego
+		// Optionally, other conditions for
+		// Your runtime follow
 
-		// Zeswapuj ze soba wskaznik na ramke i na obiekt/ciag/wskaznik/wartosc
+		// Swap the frame pointer and the one to the object/string/pointer/value
 		freeptr ^= obj_addr ^= freeptr ^= obj_addr;
-		// Zaktualizuj odpowiednio rejestr ramek wolnej przestrzeni
+		// Update the free space frames registry
 		m.free_frms[i] = freeptr;
-		// Jezeli pracowalismy na obiekcie/ciagu
-		if(m.M[obj_addr] == LO_OBJ)
+		// If we have been working on an object or a string
+		if(m.heap[obj_addr] == LO_OBJ)
 		{
-			// Zaktualizuj IAT
+			// Update IAT
 			auto b = search_iat_by_d(m, freeptr);
 			if(b == -1) continue;
 			m.IAT[b] = obj_addr;
@@ -240,9 +242,9 @@ void compact_ins(memory& m)
 
 void mem_compactify(Kreczmar::memory& m, std::size_t effectivity)
 {
-	// Czy teraz, jak compact_fs jest wywolywane w compact_ins, to czy wywolywanie
-	// go tutaj jest potrzebne?
-	// I czy w ogole ta petla jest potrzebna?
+	// Does now, when compact_fs is being called in compact_ins, this call
+	// is needed?
+	// And is this loop?
 	for(std::size_t i = 0; i < effectivity; i++)
 	{
 		compact_fs(m);

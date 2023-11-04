@@ -13,7 +13,7 @@ struct VM
 {
 	enum resource
 	{
-		ram, code, reg
+		heap, data, code, reg
 	};
 	bool debug_mode;
 	bool executing;

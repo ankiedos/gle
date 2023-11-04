@@ -31,47 +31,97 @@ word exec_argument(word val, word mode, word res)
 		switch(res)
 		{
 		case RES_LIT:    return val;
-		case RES_RAM:    return vm.mem.M[val];
+		case RES_HEAP:   return vm.mem.heap[val];
+		case RES_DATA:   return vm.mem.data[val];
 		case RES_CODE:   return vm.c[val];
 		case RES_REG:    return vm.regs[val];
 		}
-	case AMODE_PTR:
+	case AMODE_PTR_H:
 		switch(res)
 		{
-		case RES_LIT:    return vm.mem.M[val];
-		case RES_RAM:    return vm.mem.M[vm.mem.M[val]];
-		case RES_CODE:   return vm.mem.M[vm.c[val]];
-		case RES_REG:    return vm.mem.M[vm.regs[val]];
+		case RES_LIT:    return vm.mem.heap[val];
+		case RES_HEAP:   return vm.mem.heap[vm.mem.heap[val]];
+		case RES_DATA:   return vm.mem.heap[vm.mem.data[val]];
+		case RES_CODE:   return vm.mem.heap[vm.c[val]];
+		case RES_REG:    return vm.mem.heap[vm.regs[val]];
 		}
-	case AMODE_REMOTE:
+	case AMODE_PTR_D:
 		switch(res)
 		{
-		case RES_LIT:    return vm.mem.M[vm.mem.M[val]];
-		case RES_RAM:    return vm.mem.M[vm.mem.M[vm.mem.M[val]]];
-		case RES_CODE:   return vm.mem.M[vm.mem.M[vm.c[val]]];
-		case RES_REG:    return vm.mem.M[vm.mem.M[vm.regs[val]]];
+		case RES_LIT:    return vm.mem.data[val];
+		case RES_HEAP:   return vm.mem.data[vm.mem.heap[val]];
+		case RES_DATA:   return vm.mem.data[vm.mem.data[val]];
+		case RES_CODE:   return vm.mem.data[vm.c[val]];
+		case RES_REG:    return vm.mem.data[vm.regs[val]];
+		}
+	case AMODE_REMOTE_HH:
+		switch(res)
+		{
+		case RES_LIT:    return vm.mem.heap[vm.mem.heap[val]];
+		case RES_HEAP:   return vm.mem.heap[vm.mem.heap[vm.mem.heap[val]]];
+		case RES_DATA:   return vm.mem.heap[vm.mem.heap[vm.mem.data[val]]];
+		case RES_CODE:   return vm.mem.heap[vm.mem.heap[vm.c[val]]];
+		case RES_REG:    return vm.mem.heap[vm.mem.heap[vm.regs[val]]];
+		}
+	case AMODE_REMOTE_HD:
+		switch(res)
+		{
+		case RES_LIT:    return vm.mem.data[vm.mem.heap[val]];
+		case RES_HEAP:   return vm.mem.data[vm.mem.heap[vm.mem.heap[val]]];
+		case RES_DATA:   return vm.mem.data[vm.mem.heap[vm.mem.data[val]]];
+		case RES_CODE:   return vm.mem.data[vm.mem.heap[vm.c[val]]];
+		case RES_REG:    return vm.mem.data[vm.mem.heap[vm.regs[val]]];
+		}
+	case AMODE_REMOTE_DH:
+		switch(res)
+		{
+		case RES_LIT:    return vm.mem.heap[vm.mem.data[val]];
+		case RES_HEAP:   return vm.mem.heap[vm.mem.data[vm.mem.heap[val]]];
+		case RES_DATA:   return vm.mem.heap[vm.mem.data[vm.mem.data[val]]];
+		case RES_CODE:   return vm.mem.heap[vm.mem.data[vm.c[val]]];
+		case RES_REG:    return vm.mem.heap[vm.mem.data[vm.regs[val]]];
+		}
+	case AMODE_REMOTE_DD:
+		switch(res)
+		{
+		case RES_LIT:    return vm.mem.data[vm.mem.data[val]];
+		case RES_HEAP:   return vm.mem.data[vm.mem.data[vm.mem.heap[val]]];
+		case RES_DATA:   return vm.mem.data[vm.mem.data[vm.mem.data[val]]];
+		case RES_CODE:   return vm.mem.data[vm.mem.data[vm.c[val]]];
+		case RES_REG:    return vm.mem.data[vm.mem.data[vm.regs[val]]];
 		}
 	case AMODE_LOCAL:
 		switch(res)
 		{
 		case RES_LIT:    return vm.regs[1] + val;
-		case RES_RAM:    return vm.regs[1] + vm.mem.M[val];
+		case RES_HEAP:   return vm.regs[1] + vm.mem.heap[val];
+		case RES_DATA:   return vm.regs[1] + vm.mem.data[val];
 		case RES_CODE:   return vm.regs[1] + vm.c[val];
 		case RES_REG:    return vm.regs[1] + vm.regs[val];
-		}//return vm.mem.M[1] + val; // b64 + val
-	case AMODE_LOCALPTR:
+		}//return vm.mem.heap[1] + val; // b64 + val
+	case AMODE_LOCALPTR_H:
 		switch(res)
 		{
-		case RES_LIT:    return vm.regs[1] + vm.mem.M[val];
-		case RES_RAM:    return vm.regs[1] + vm.mem.M[vm.mem.M[val]];
-		case RES_CODE:   return vm.regs[1] + vm.mem.M[vm.c[val]];
-		case RES_REG:    return vm.regs[1] + vm.mem.M[vm.regs[val]];
-		}//return vm.mem.M[1] + vm.mem.M[val]; // b64 + [val]
+		case RES_LIT:    return vm.regs[1] + vm.mem.heap[val];
+		case RES_HEAP:   return vm.regs[1] + vm.mem.heap[vm.mem.heap[val]];
+		case RES_DATA:   return vm.regs[1] + vm.mem.heap[vm.mem.data[val]];
+		case RES_CODE:   return vm.regs[1] + vm.mem.heap[vm.c[val]];
+		case RES_REG:    return vm.regs[1] + vm.mem.heap[vm.regs[val]];
+		}//return vm.mem.heap[1] + vm.mem.heap[val]; // b64 + [val]
+	case AMODE_LOCALPTR_D:
+		switch(res)
+		{
+		case RES_LIT:    return vm.regs[1] + vm.mem.data[val];
+		case RES_HEAP:   return vm.regs[1] + vm.mem.data[vm.mem.heap[val]];
+		case RES_DATA:   return vm.regs[1] + vm.mem.data[vm.mem.data[val]];
+		case RES_CODE:   return vm.regs[1] + vm.mem.data[vm.c[val]];
+		case RES_REG:    return vm.regs[1] + vm.mem.data[vm.regs[val]];
+		}//return vm.mem.heap[1] + vm.mem.heap[val]; // b64 + [val]
 	default: break; // THROWS SIG SEGV
 	}
 }
 
-void store(word dst, word src)
+/* void store(word dst, word src)
 {
     vm.mem.M[dst] = src;
 }
@@ -82,12 +132,12 @@ void store_real(word dst, word src)
 void store_boolean(word dst, word src)
 {
     vm.mem.M[dst] = *(unsigned char*)(src);
-}
+} */
 
 void vm_init(bool debug = false)
 {
 	vm.debug_mode = debug;
-	mem_init(vm.mem, 50, 50);
+	mem_init(vm.mem, 50, 50, 50);
 }
 void vm_link(const std::vector<word>& code)
 {
@@ -104,7 +154,8 @@ void stpop()
 	// THROWS: SIG UNDERFLOW
 	switch(vm.current_resource)
 	{
-	case VM::ram: vm.mem.M[arg[0]] = vm.mem.stack[--vm.regs[sp]]; break;
+	case VM::heap: vm.mem.heap[arg[0]] = vm.mem.stack[--vm.regs[sp]]; break;
+	case VM::data: vm.mem.data[arg[0]] = vm.mem.stack[--vm.regs[sp]]; break;
 	case VM::code: vm.c[arg[0]] = vm.mem.stack[--vm.regs[sp]]; break;
 	case VM::reg: vm.regs[arg[0]] = vm.mem.stack[--vm.regs[sp]]; break;
 	}
@@ -113,7 +164,8 @@ void sttop()
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram: vm.mem.M[arg[0]] = vm.mem.stack[vm.regs[sp] - 1]; break;
+	case VM::heap: vm.mem.heap[arg[0]] = vm.mem.stack[vm.regs[sp] - 1]; break;
+	case VM::data: vm.mem.data[arg[0]] = vm.mem.stack[vm.regs[sp] - 1]; break;
 	case VM::code: vm.c[arg[0]] = vm.mem.stack[vm.regs[sp] - 1]; break;
 	case VM::reg: vm.regs[arg[0]] = vm.mem.stack[vm.regs[sp] - 1]; break;
 	}
@@ -123,7 +175,8 @@ void stget()
 	// THROWS SIG BOUNDS
 	switch(vm.current_resource)
 	{
-	case VM::ram: vm.mem.M[arg[0]] = get_stack(arg[1]); break;
+	case VM::heap: vm.mem.heap[arg[0]] = get_stack(arg[1]); break;
+	case VM::data: vm.mem.data[arg[0]] = get_stack(arg[1]); break;
 	case VM::code: vm.c[arg[0]] = get_stack(arg[1]); break;
 	case VM::reg: vm.regs[arg[0]] = get_stack(arg[1]); break;
 	}
@@ -132,7 +185,8 @@ void ineg()
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram: vm.mem.M[arg[0]] = -arg[1]; break;
+	case VM::heap: vm.mem.heap[arg[0]] = -arg[1]; break;
+	case VM::data: vm.mem.data[arg[0]] = -arg[1]; break;
 	case VM::code: vm.c[arg[0]] = -arg[1]; break;
 	case VM::reg: vm.regs[arg[0]] = -arg[1]; break;
 	}
@@ -141,7 +195,8 @@ void fneg() // floating-point instructions must wait for the implementation of v
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram: break;// vm.mem.M[dst] = *(src)
+	case VM::heap: break;// vm.mem.heap[dst] = *(src)
+	case VM::data: break;// vm.mem.data[dst] = *(src)
 	case VM::code: break;
 	case VM::reg: break;
 	}
@@ -150,7 +205,8 @@ void lneg()
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram: vm.mem.M[arg[0]] = arg[1] ^ gle_true + gle_false; break;
+	case VM::heap: vm.mem.heap[arg[0]] = arg[1] ^ gle_true + gle_false; break;
+	case VM::data: vm.mem.data[arg[0]] = arg[1] ^ gle_true + gle_false; break;
 	case VM::code: vm.c[arg[0]] = arg[1] ^ gle_true + gle_false; break;
 	case VM::reg: vm.regs[arg[0]] = arg[1] ^ gle_true + gle_false; break;
 	}
@@ -159,7 +215,8 @@ void iadd()
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram: vm.mem.M[arg[0]] = arg[1] + arg[2]; break;
+	case VM::heap: vm.mem.heap[arg[0]] = arg[1] + arg[2]; break;
+	case VM::data: vm.mem.data[arg[0]] = arg[1] + arg[2]; break;
 	case VM::code: vm.c[arg[0]] = arg[1] + arg[2]; break;
 	case VM::reg: vm.regs[arg[0]] = arg[1] + arg[2]; break;
 	}
@@ -176,7 +233,8 @@ void fadd() // floating-point instructions must wait for the implementation of v
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram: break;
+	case VM::heap: break;
+	case VM::data: break;
 	case VM::code: break;
 	case VM::reg: break;
 	}
@@ -185,7 +243,8 @@ void ladd()
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram: vm.mem.M[arg[0]] = (((arg[1] << 1) & arg[2]) != 0) ? gle_true : gle_false; break;
+	case VM::heap: vm.mem.heap[arg[0]] = (((arg[1] << 1) & arg[2]) != 0) ? gle_true : gle_false; break;
+	case VM::data: vm.mem.data[arg[0]] = (((arg[1] << 1) & arg[2]) != 0) ? gle_true : gle_false; break;
 	case VM::code: vm.c[arg[0]] = (((arg[1] << 1) & arg[2]) != 0) ? gle_true : gle_false; break;
 	case VM::reg: vm.regs[arg[0]] = (((arg[1] << 1) & arg[2]) != 0) ? gle_true : gle_false; break;
 	}
@@ -194,7 +253,8 @@ void isub()
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram: vm.mem.M[arg[0]] = arg[1] - arg[2]; break;
+	case VM::heap: vm.mem.heap[arg[0]] = arg[1] - arg[2]; break;
+	case VM::data: vm.mem.data[arg[0]] = arg[1] - arg[2]; break;
 	case VM::code: vm.c[arg[0]] = arg[1] - arg[2]; break;
 	case VM::reg: vm.regs[arg[0]] = arg[1] - arg[2]; break;
 	}
@@ -211,7 +271,8 @@ void fsub() // floating-point instructions must wait for the implementation of v
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram: break;
+	case VM::heap: break;
+	case VM::data: break;
 	case VM::code: break;
 	case VM::reg: break;
 	}
@@ -220,7 +281,8 @@ void lsub()
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram: vm.mem.M[arg[0]] = arg[1] ^ arg[2] + gle_false; break;
+	case VM::heap: vm.mem.heap[arg[0]] = arg[1] ^ arg[2] + gle_false; break;
+	case VM::data: vm.mem.data[arg[0]] = arg[1] ^ arg[2] + gle_false; break;
 	case VM::code: vm.c[arg[0]] = arg[1] ^ arg[2] + gle_false; break;
 	case VM::reg: vm.regs[arg[0]] = arg[1] ^ arg[2] + gle_false; break;
 	}
@@ -229,7 +291,8 @@ void imul()
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram: vm.mem.M[arg[0]] = arg[1] * arg[2]; break;
+	case VM::heap: vm.mem.heap[arg[0]] = arg[1] * arg[2]; break;
+	case VM::data: vm.mem.data[arg[0]] = arg[1] * arg[2]; break;
 	case VM::code: vm.c[arg[0]] = arg[1] * arg[2]; break;
 	case VM::reg: vm.regs[arg[0]] = arg[1] * arg[2]; break;
 	}
@@ -246,7 +309,8 @@ void fmul() // floating-point instructions must wait for the implementation of v
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram: break;
+	case VM::heap: break;
+	case VM::data: break;
 	case VM::code: break;
 	case VM::reg: break;
 	}
@@ -255,7 +319,8 @@ void lmul()
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram: vm.mem.M[arg[0]] = arg[1] & arg[2]; break;
+	case VM::heap: vm.mem.heap[arg[0]] = arg[1] & arg[2]; break;
+	case VM::data: vm.mem.data[arg[0]] = arg[1] & arg[2]; break;
 	case VM::code: vm.c[arg[0]] = arg[1] & arg[2]; break;
 	case VM::reg: vm.regs[arg[0]] = arg[1] & arg[2]; break;
 	}
@@ -265,7 +330,8 @@ void idiv()
 	// THROWS SIG DIVZERO
 	switch(vm.current_resource)
 	{
-	case VM::ram: vm.mem.M[arg[0]] = arg[1] / arg[2]; break;
+	case VM::heap: vm.mem.heap[arg[0]] = arg[1] / arg[2]; break;
+	case VM::data: vm.mem.data[arg[0]] = arg[1] / arg[2]; break;
 	case VM::code: vm.c[arg[0]] = arg[1] / arg[2]; break;
 	case VM::reg: vm.regs[arg[0]] = arg[1] / arg[2]; break;
 	}
@@ -275,7 +341,8 @@ void fdiv() // floating-point instructions must wait for the implementation of v
 	// ON rhs == 0 dst = Inf
 	switch(vm.current_resource)
 	{
-	case VM::ram: break;
+	case VM::heap: break;
+	case VM::data: break;
 	case VM::code: break;
 	case VM::reg: break;
 	}
@@ -284,9 +351,13 @@ void ldiv()
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram:
-		if(arg[1] == gle_false) vm.mem.M[arg[0]] = gle_true;
-		else vm.mem.M[arg[0]] = arg[1];
+	case VM::heap:
+		if(arg[1] == gle_false) vm.mem.heap[arg[0]] = gle_true;
+		else vm.mem.heap[arg[0]] = arg[1];
+		break;
+	case VM::data:
+		if(arg[1] == gle_false) vm.mem.data[arg[0]] = gle_true;
+		else vm.mem.data[arg[0]] = arg[1];
 		break;
 	case VM::code:
 		if(arg[1] == gle_false) vm.c[arg[0]] = gle_true;
@@ -303,7 +374,8 @@ void imod()
 	// THROWS SIG DIVZERO
 	switch(vm.current_resource)
 	{
-	case VM::ram: vm.mem.M[arg[0]] = arg[1] % arg[2]; break;
+	case VM::heap: vm.mem.heap[arg[0]] = arg[1] % arg[2]; break;
+	case VM::data: vm.mem.data[arg[0]] = arg[1] % arg[2]; break;
 	case VM::code: vm.c[arg[0]] = arg[1] % arg[2]; break;
 	case VM::reg: vm.regs[arg[0]] = arg[1] % arg[2]; break;
 	}
@@ -312,7 +384,8 @@ void iinc()
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram: vm.mem.M[arg[0]] = arg[1] + 1; break;
+	case VM::heap: vm.mem.heap[arg[0]] = arg[1] + 1; break;
+	case VM::data: vm.mem.data[arg[0]] = arg[1] + 1; break;
 	case VM::code: vm.c[arg[0]] = arg[1] + 1; break;
 	case VM::reg: vm.regs[arg[0]] = arg[1] + 1; break;
 	}
@@ -321,7 +394,8 @@ void finc() // floating-point instructions must wait for the implementation of v
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram: break;
+	case VM::heap: break;
+	case VM::data: break;
 	case VM::code: break;
 	case VM::reg: break;
 	}
@@ -330,7 +404,8 @@ void linc()
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram: vm.mem.M[arg[0]] = gle_true; break;
+	case VM::heap: vm.mem.heap[arg[0]] = gle_true; break;
+	case VM::data: vm.mem.data[arg[0]] = gle_true; break;
 	case VM::code: vm.c[arg[0]] = gle_true; break;
 	case VM::reg: vm.regs[arg[0]] = gle_true; break;
 	}
@@ -339,7 +414,8 @@ void idec()
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram: vm.mem.M[arg[0]] = arg[1] - 1; break;
+	case VM::heap: vm.mem.heap[arg[0]] = arg[1] - 1; break;
+	case VM::data: vm.mem.data[arg[0]] = arg[1] - 1; break;
 	case VM::code: vm.c[arg[0]] = arg[1] - 1; break;
 	case VM::reg: vm.regs[arg[0]] = arg[1] - 1; break;
 	}
@@ -348,7 +424,8 @@ void fdec() // floating-point instructions must wait for the implementation of v
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram: break;
+	case VM::heap: break;
+	case VM::data: break;
 	case VM::code: break;
 	case VM::reg: break;
 	}
@@ -357,7 +434,8 @@ void ldec()
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram: vm.mem.M[arg[0]] = gle_false; break;
+	case VM::heap: vm.mem.heap[arg[0]] = gle_false; break;
+	case VM::data: vm.mem.data[arg[0]] = gle_false; break;
 	case VM::code: vm.c[arg[0]] = gle_false; break;
 	case VM::reg: vm.regs[arg[0]] = gle_false; break;
 	}
@@ -366,16 +444,27 @@ void isgn()
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram:
+	case VM::heap:
 		if(arg[1] > 0)
 		{
-			vm.mem.M[arg[0]] = 1;
+			vm.mem.heap[arg[0]] = 1;
 		}
 		else if(arg[1] < 0)
 		{
-			vm.mem.M[arg[0]] = -1;
+			vm.mem.heap[arg[0]] = -1;
 		}
-		else vm.mem.M[arg[0]] = 0;
+		else vm.mem.heap[arg[0]] = 0;
+		break;
+	case VM::data:
+		if(arg[1] > 0)
+		{
+			vm.mem.data[arg[0]] = 1;
+		}
+		else if(arg[1] < 0)
+		{
+			vm.mem.data[arg[0]] = -1;
+		}
+		else vm.mem.data[arg[0]] = 0;
 		break;
 	case VM::code:
 		if(arg[1] > 0)
@@ -405,7 +494,8 @@ void fsgn() // floating-point instructions must wait for the implementation of v
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram: break;
+	case VM::heap: break;
+	case VM::data: break;
 	case VM::code: break;
 	case VM::reg: break;
 	}
@@ -414,9 +504,13 @@ void lsgn()
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram:
-		if(arg[1] == gle_true) vm.mem.M[arg[0]] = 1;
-		else vm.mem.M[arg[0]] = -1;
+	case VM::heap:
+		if(arg[1] == gle_true) vm.mem.heap[arg[0]] = 1;
+		else vm.mem.heap[arg[0]] = -1;
+		break;
+	case VM::data:
+		if(arg[1] == gle_true) vm.mem.data[arg[0]] = 1;
+		else vm.mem.data[arg[0]] = -1;
 		break;
 	case VM::code:
 		if(arg[1] == gle_true) vm.c[arg[0]] = 1;
@@ -432,9 +526,13 @@ void iabs()
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram:
-		if(arg[1] < 0) vm.mem.M[arg[0]] = -arg[1];
-		else vm.mem.M[arg[0]] = arg[1];
+	case VM::heap:
+		if(arg[1] < 0) vm.mem.heap[arg[0]] = -arg[1];
+		else vm.mem.heap[arg[0]] = arg[1];
+		break;
+	case VM::data:
+		if(arg[1] < 0) vm.mem.data[arg[0]] = -arg[1];
+		else vm.mem.data[arg[0]] = arg[1];
 		break;
 	case VM::code:
 		if(arg[1] < 0) vm.c[arg[0]] = -arg[1];
@@ -450,7 +548,8 @@ void fabs() // floating-point instructions must wait for the implementation of v
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram: break;
+	case VM::heap: break;
+	case VM::data: break;
 	case VM::code: break;
 	case VM::reg: break;
 	}
@@ -459,9 +558,13 @@ void labs()
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram:
-		if(arg[1] == gle_true) vm.mem.M[arg[0]] = 1;
-		else vm.mem.M[arg[0]] = -1;
+	case VM::heap:
+		if(arg[1] == gle_true) vm.mem.heap[arg[0]] = 1;
+		else vm.mem.heap[arg[0]] = -1;
+		break;
+	case VM::data:
+		if(arg[1] == gle_true) vm.mem.data[arg[0]] = 1;
+		else vm.mem.data[arg[0]] = -1;
 		break;
 	case VM::code:
 		if(arg[1] == gle_true) vm.c[arg[0]] = 1;
@@ -477,7 +580,8 @@ void bor()
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram: vm.mem.M[arg[0]] = arg[1] | arg[2]; break;
+	case VM::heap: vm.mem.heap[arg[0]] = arg[1] | arg[2]; break;
+	case VM::data: vm.mem.data[arg[0]] = arg[1] | arg[2]; break;
 	case VM::code: vm.c[arg[0]] = arg[1] | arg[2]; break;
 	case VM::reg: vm.regs[arg[0]] = arg[1] | arg[2]; break;
 	}
@@ -486,7 +590,8 @@ void band()
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram: vm.mem.M[arg[0]] = arg[1] & arg[2]; break;
+	case VM::heap: vm.mem.heap[arg[0]] = arg[1] & arg[2]; break;
+	case VM::data: vm.mem.data[arg[0]] = arg[1] & arg[2]; break;
 	case VM::code: vm.c[arg[0]] = arg[1] & arg[2]; break;
 	case VM::reg: vm.regs[arg[0]] = arg[1] & arg[2]; break;
 	}
@@ -495,7 +600,8 @@ void bxor()
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram: vm.mem.M[arg[0]] = arg[1] ^ arg[2]; break;
+	case VM::heap: vm.mem.heap[arg[0]] = arg[1] ^ arg[2]; break;
+	case VM::data: vm.mem.data[arg[0]] = arg[1] ^ arg[2]; break;
 	case VM::code: vm.c[arg[0]] = arg[1] ^ arg[2]; break;
 	case VM::reg: vm.regs[arg[0]] = arg[1] ^ arg[2]; break;
 	}
@@ -504,7 +610,8 @@ void ishl()
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram: vm.mem.M[arg[0]] = arg[1] << arg[2]; break;
+	case VM::heap: vm.mem.heap[arg[0]] = arg[1] << arg[2]; break;
+	case VM::data: vm.mem.data[arg[0]] = arg[1] << arg[2]; break;
 	case VM::code: vm.c[arg[0]] = arg[1] << arg[2]; break;
 	case VM::reg: vm.regs[arg[0]] = arg[1] << arg[2]; break;
 	}
@@ -513,7 +620,8 @@ void fshl()
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram: break;
+	case VM::heap: break;
+	case VM::data: break;
 	case VM::code: break;
 	case VM::reg: break;
 	}
@@ -526,7 +634,8 @@ void ishr()
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram: vm.mem.M[arg[0]] = arg[1] >> arg[2]; break;
+	case VM::heap: vm.mem.heap[arg[0]] = arg[1] >> arg[2]; break;
+	case VM::data: vm.mem.data[arg[0]] = arg[1] >> arg[2]; break;
 	case VM::code: vm.c[arg[0]] = arg[1] >> arg[2]; break;
 	case VM::reg: vm.regs[arg[0]] = arg[1] >> arg[2]; break;
 	}
@@ -535,7 +644,8 @@ void fshr()
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram: break;
+	case VM::heap: break;
+	case VM::data: break;
 	case VM::code: break;
 	case VM::reg: break;
 	}
@@ -548,7 +658,8 @@ void bnot()
 {
 	switch(vm.current_resource)
 	{
-	case VM::ram: vm.mem.M[arg[0]] = ~arg[1]; break;
+	case VM::heap: vm.mem.heap[arg[0]] = ~arg[1]; break;
+	case VM::data: vm.mem.data[arg[0]] = ~arg[1]; break;
 	case VM::code: vm.c[arg[0]] = ~arg[1]; break;
 	case VM::reg: vm.regs[arg[0]] = ~arg[1]; break;
 	}
@@ -557,8 +668,8 @@ void bnot()
 
 #define ADDR_MODE(i)\
 auto meta##i = vm.c[vm.ip++];\
-res[i] = meta##i >> 5;\
-mode[i] = meta##i & 0x1F;
+res[i] = meta##i >> AMODE_SIZE;\
+mode[i] = meta##i & 0b00011111;
 
 #define OPERAND_IN(i) arg[i] = exec_argument(vm.c[vm.ip++], mode[i], res[i]);
 #define OPERAND_OUT(i) arg[i] = exec_argument(vm.c[vm.ip++], mode[i], res[i]);
@@ -593,8 +704,12 @@ exec_res vm_run()
 			vm.current_resource = VM::reg;
 			vm.ip++;
 			break;
+		case 0xDA:
+			vm.current_resource = VM::data;
+			vm.ip++;
+			break;
 		default:
-			vm.current_resource = VM::ram;
+			vm.current_resource = VM::heap;
 			break;
 		}
 		switch(vm.c[vm.ip++])
@@ -1070,13 +1185,13 @@ void vm_free()
 
 word get_reg(const std::string& reg)
 {
-	if(reg == "a64") return vm.mem.M[0];
-	if(reg == "b64") return vm.mem.M[1];
-	if(reg == "c64") return vm.mem.M[2];
-	if(reg == "d64") return vm.mem.M[3];
-	if(reg == "e64") return vm.mem.M[4];
-	if(reg == "f64") return vm.mem.M[5];
-	if(reg == "carry64") return vm.mem.M[6];
+	if(reg == "a64") return vm.regs[0];
+	if(reg == "b64") return vm.regs[1];
+	if(reg == "c64") return vm.regs[2];
+	if(reg == "d64") return vm.regs[3];
+	if(reg == "e64") return vm.regs[4];
+	if(reg == "f64") return vm.regs[5];
+	if(reg == "carry64") return vm.regs[6];
 	return 0;
 }
 word get_reg_addr(const std::string& reg)
@@ -1104,7 +1219,7 @@ void zero_regs()
 {
 	for(std::size_t i = 0; i < 7; i++)
 	{
-		vm.mem.M[i] = 0;
+		vm.regs[i] = 0;
 	}
 }
 

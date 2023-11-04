@@ -66,9 +66,11 @@ These modules are just `struct`s specifying layouts of the raw array of words.
 
 # Instruction Prefixes
 When there's `0xCC` before an opcode, `vm.current_resource` is set to `vm.c`. Then, when the instruction is being executed (e.g. `iadd`):
-`vm.current_resource[dst] = lhs + rhs;` changes the byte at index `dst` of `vm.c`.
+something equivalent to `vm.current_resource[dst] = lhs + rhs;` changes the byte at index `dst` of `vm.c`.
 
 
 On the other hand, when there's `0xFF` before an opcode, `vm.current_resource` is set to `vm.regs`. Then, when the instruction is being executed (e.g. `isub`):
 
-`vm.current_resource[dst] = lhs - rhs;` changes the register numbered `dst`.
+something equivalent to `vm.current_resource[dst] = lhs - rhs;` changes the register numbered `dst`.
+
+Lastly, `0xDA` changes `vm.current_resource` to `vm.mem.data`.

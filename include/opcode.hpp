@@ -119,12 +119,44 @@ enum opcode // 0-138 instrs
 
 enum addr_mode
 {
-	AMODE_VAL, AMODE_PTR, AMODE_REMOTE, AMODE_LOCAL, AMODE_LOCALPTR,
-	AMODE_SIZE
+	AMODE_LOCALPTR_H = 0b00100,
+	AMODE_LOCALPTR_D = 0b00110,
+	AMODE_REMOTE_DD = 0b01000,
+	AMODE_REMOTE_DH = 0b01001,
+	AMODE_REMOTE_HD = 0b01010,
+	AMODE_REMOTE_HH = 0b01011,
+	AMODE_PTR_D     = 0b01100,
+	AMODE_PTR_H     = 0b01110,
+	AMODE_LOCAL     = 0b10100,
+	AMODE_VAL       = 0b11100,
+	AMODE_SIZE      = 5
 };
+
+
+//       GLOB LOC
+//      ===========
+// VAL | VAL  LOCAL
+// REF | PTR LOCPTR
+
+// when 0st bit = 1 => 3rd and 4th are ignored
+// when 1st bit = 0 and 2nd is 1 => 4th is ignored
+
+//    0        1       2     3   4
+//    VAL|REF GLOB|LOC VAL|REF H|D H|D
+// VAL:  1        1       1     0   0
+// PTRD: 0        1       1     0   0
+// PTRH: 0        1       1     1   0
+// REHH: 0        1       0     1   1
+// REHD: 0        1       0     1   0
+// REDH: 0        1       0     0   1
+// REDD: 0        1       0     0   0
+// LOC:  1        0       1     0   0
+// LCPD: 0        0       1     1   0
+// LCPH: 0        0       1     0   0
+
 enum resource
 {
-	RES_LIT, RES_RAM, RES_CODE, RES_REG,
+	RES_LIT, RES_HEAP, RES_DATA, RES_CODE, RES_REG,
 	RES_SIZE
 };
 

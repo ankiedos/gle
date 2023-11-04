@@ -3,6 +3,7 @@
 
 #include<limits>
 #include<queue>
+#include<vector>
 
 #include "procmessage.hpp"
 
@@ -27,7 +28,9 @@ namespace GLE
     struct process
     {
         std::size_t pid;
-        std::size_t ip = 0;
+        int regs[16] = {};
+        std::vector<unsigned long long> stack;
+        std::vector<char> code;
         procflags flags;
         std::queue<procmessage> msgqueue;
         std::size_t file_descrs[std::numeric_limits<std::size_t>::max()];

@@ -14,29 +14,27 @@ namespace GLE
 {
     enum opcode
     {
-        OP_SET, OP_IPLUS, OP_IMINUS, OP_IMULT, OP_IDIV, OP_FPLUS, OP_FMINUS, OP_FMULT, OP_FDIV,
+        OP_IPLUS, OP_IMINUS, OP_IMULT, OP_IDIV, OP_FPLUS, OP_FMINUS, OP_FMULT, OP_FDIV,
         OP_RET, OP_CALL, OP_JMP, OP_CMP, OP_SYSCALL, OP_LDR, OP_STR, OP_LD, OP_SPAWN, OP_PUSH, OP_POP,
         OP_INC, OP_DEC, OP_NEG, OP_NOT, OP_AND, OP_OR, OP_XOR,
         OP_CO_BREAK, OP_CO_CONTINUE // coroutine-related
     };
     struct RT
     {
-        sparse_mem_vector mem;
-        std::stack<char> stack;
         process* curr_proc;
         std::vector<process> processes;
         byte_arithmetic eval;
         int exec()
         {
             int ec = 0;
-            auto arg0 = 0, arg1 = 0, arg2 = 0;
+            uint64_t arg0 = 0, arg1 = 0, arg2 = 0;
             bool jumped = true;
             while(true)
             {
                 #define AT(x) get(mem, x, curr_proc->pid, ec)
                 #define LOOP(n) for(std::size_t i = instr_addr + 1 + (8 * (n + 1)); i >= instr_addr + 2 + (8 * n); i--)\
                         {\
-                            arg0 += AT(i) << (i - instr_addr - 9);\
+                            arg0 += curr_proc->code[i] << (i - instr_addr - 9);\
                         }
                 #define INSTR2_EPILOGUE(n) arg0 = arg1 = 0;\
                 curr_proc->ip += (n);
@@ -44,142 +42,23 @@ namespace GLE
                 curr_proc->ip += (n);
 
                 auto instr_addr = curr_proc->ip;
-                switch(AT(instr_addr))
+                switch(curr_proc->code[instr_addr])
                 {
-                case OP_SET:
-                    LOOP(0)
-                    LOOP(1)
-                    switch(AT(instr_addr + 18))
-                    {
-                    case 0x00:
-                        eval.set(arg0, AT(arg1), AT(arg1 + 8) /* inclusively */);
-                        break;
-                    case 0x01:
-                        eval.set(arg0, arg1);
-                        break;
-                    default: break;
-                    }
-                    INSTR2_EPILOGUE(18)
-                    break;
                 case OP_IPLUS:
-                    LOOP(0)
-                    LOOP(1)
-                    switch(AT(instr_addr + 18))
-                    {
-                    case 0x00:
-                        eval.iplus(arg0, AT(arg1), AT(arg1 + 8));
-                        break;
-                    case 0x01:
-                        eval.iplus(arg0, arg1);
-                        break;
-                    default: break;
-                    }
-                    INSTR2_EPILOGUE(18)
                     break;
                 case OP_IMINUS:
-                    LOOP(0)
-                    LOOP(1)
-                    switch(AT(instr_addr + 18))
-                    {
-                    case 0x00:
-                        eval.iminus(arg0, AT(arg1), AT(arg1 + 8));
-                        break;
-                    case 0x01:
-                        eval.iminus(arg0, arg1);
-                        break;
-                    default: break;
-                    }
-                    INSTR2_EPILOGUE(18)
                     break;
                 case OP_IMULT:
-                    LOOP(0)
-                    LOOP(1)
-                    switch(AT(instr_addr + 18))
-                    {
-                    case 0x00:
-                        eval.imult(arg0, AT(arg1), AT(arg1 + 8));
-                        break;
-                    case 0x01:
-                        eval.imult(arg0, arg1);
-                        break;
-                    default: break;
-                    }
-                    INSTR2_EPILOGUE(18)
                     break;
                 case OP_IDIV:
-                    LOOP(0)
-                    LOOP(1)
-                    switch(AT(instr_addr + 18))
-                    {
-                    case 0x00:
-                        eval.idiv(arg0, AT(arg1), AT(arg1 + 8));
-                        break;
-                    case 0x01:
-                        eval.idiv(arg0, arg1);
-                        break;
-                    default: break;
-                    }
-                    INSTR2_EPILOGUE(18)
                     break;
                 case OP_FPLUS:
-                    LOOP(0)
-                    LOOP(1)
-                    switch(AT(instr_addr + 18))
-                    {
-                    case 0x00:
-                        eval.fplus(arg0, AT(arg1), AT(arg1 + 8));
-                        break;
-                    case 0x01:
-                        eval.fplus(arg0, arg1);
-                        break;
-                    default: break;
-                    }
-                    INSTR2_EPILOGUE(18)
                     break;
                 case OP_FMINUS:
-                    LOOP(0)
-                    LOOP(1)
-                    switch(AT(instr_addr + 18))
-                    {
-                    case 0x00:
-                        eval.fminus(arg0, AT(arg1), AT(arg1 + 8));
-                        break;
-                    case 0x01:
-                        eval.fminus(arg0, arg1);
-                        break;
-                    default: break;
-                    }
-                    INSTR2_EPILOGUE(18)
                     break;
                 case OP_FMULT:
-                    LOOP(0)
-                    LOOP(1)
-                    switch(AT(instr_addr + 18))
-                    {
-                    case 0x00:
-                        eval.fmult(arg0, AT(arg1), AT(arg1 + 8));
-                        break;
-                    case 0x01:
-                        eval.fmult(arg0, arg1);
-                        break;
-                    default: break;
-                    }
-                    INSTR2_EPILOGUE(18)
                     break;
                 case OP_FDIV:
-                    LOOP(0)
-                    LOOP(1)
-                    switch(AT(instr_addr + 18))
-                    {
-                    case 0x00:
-                        eval.fdiv(arg0, AT(arg1), AT(arg1 + 8));
-                        break;
-                    case 0x01:
-                        eval.fdiv(arg0, arg1);
-                        break;
-                    default: break;
-                    }
-                    INSTR2_EPILOGUE(18)
                     break;
                 case OP_RET: // the result is stored on the top of the stack
                     for(std::size_t i = 0; i < 8; i++)
@@ -223,10 +102,8 @@ namespace GLE
                     INSTR2_EPILOGUE(0)
                     break;
                 case OP_CMP:
-                    LOOP(0)
-                    LOOP(1)
+                    break;
                 case OP_SYSCALL:
-                    LOOP(0)
                     switch(arg0)
                     {
                     case 0x00: // printchr
@@ -251,43 +128,14 @@ namespace GLE
                     case 0x13: // system/platform metadata
                     default: break;
                     }
-                    INSTR1_EPILOGUE(9)
                     break;
                 case OP_LDR:
                 case OP_STR:
                 case OP_LD:
                 case OP_SPAWN:
                 case OP_PUSH:
-                    LOOP(0)
-                    switch(AT(instr_addr + 10))
-                    {
-                    case 0x00: // interpret arg0 as a pointer
-                        for(std::size_t i = 0; i < 8; i++)
-                        {
-                            stack.push((AT(arg0) >> (8 * i)) & (0xFF << (8 * (8 - i))));
-                        }
-                        break;
-                    case 0x01: // interpret arg0 as a value (immediate)
-                        for(std::size_t i = 0; i < 8; i++)
-                        {
-                            stack.push((arg0 >> (8 * i)) & (0xFF << (8 * (8 - i))));
-                        }
-                        break;
-                    default: break;
-                    }
-                    INSTR1_EPILOGUE(10)
                     break;
                 case OP_INC:
-                    LOOP(0)
-                    switch(AT(instr_addr + 10))
-                    {
-                    case 0x00: // ptr
-                        eval.inc(arg0); // arg0 must be integer to inc work correctly
-                        break;
-                    case 0x01: break;
-                    default: break;
-                    }
-                    INSTR1_EPILOGUE(10)
                     break;
                 case OP_DEC:
                 case OP_NEG:

@@ -25,7 +25,8 @@ struct ind_addr
 struct memory
 {
     std::vector<word> IAT;
-    std::vector<word> M;
+    std::vector<word> heap;
+    std::vector<word> data;
     std::vector<word> stack;
     bool queue_empty = true;
     std::size_t head = 0, tail = 0;
@@ -48,7 +49,7 @@ mutable                 obj,ai imp,reldb
 // ai_memory (net + kv pairs) TRAITS: mutable, mixed-size layout
 
 
-void mem_init(memory& m, std::size_t ram_size, std::size_t stack_size);
+void mem_init(memory& m, std::size_t heap_size, std::size_t data_size, std::size_t stack_size);
 bool mem_member(memory& m, word b, word counter, word* d);
 void mem_new(memory& m, word s, word* b, word* counter);
 void mem_free(memory& m, word b, word counter, word size);
